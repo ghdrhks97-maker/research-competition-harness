@@ -20,6 +20,7 @@
 AGENTS.md                              # 앱 공용 진입점(Codex/AGY/Gemini)
 GEMINI.md                              # AGENTS.md 포인터
 .claude/
+  skills/deep-interview/SKILL.md       # 대화형 인터뷰(가장 먼저 실행)
   skills/report-orchestrator/SKILL.md  # Claude Code 진입점
   agents/                              # 13개 전문 서브에이전트
     brainstorm · reference-miner · background-researcher · photo-curator
@@ -39,7 +40,9 @@ GEMINI.md                              # AGENTS.md 포인터
 
 ## 파이프라인
 
-인터뷰 → `brainstorm` → **[병렬]** `reference-miner`·`background-researcher`·`photo-curator`·`evidence-curator`·`survey-analyst`(+`rch import-survey`) → `draft-writer` → `table-layout`→`summary-sheet`/`toc-builder`/`appendix-builder` → `critic`+`rch check`/`revise-loop` → `finalizer`+`rch assemble`/`build-hwpx`/`render-check`.
+**`deep-interview`(대화형 인터뷰: 한 번에 하나씩 승인창으로 대회·대상·교과·주제·제목 확정, 주제 없으면 `brainstorm`이 후보 제안 → 계획 승인)** → **[병렬]** `reference-miner`·`background-researcher`·`photo-curator`·`evidence-curator`·`survey-analyst`(+`rch import-survey`) → `draft-writer` → `table-layout`→`summary-sheet`/`toc-builder`/`appendix-builder` → `critic`+`rch check`/`revise-loop` → `finalizer`+`rch assemble`/`build-hwpx`/`render-check`.
+
+승인 전에는 본문 생성을 시작하지 않는다(가재코드 deep-interview → ralplan → 실행 패턴).
 
 ## 안전
 
