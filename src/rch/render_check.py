@@ -162,6 +162,12 @@ def render_check(
                 section_root = ElementTree.fromstring(archive.read("Contents/section0.xml"))
             except ElementTree.ParseError:
                 section_root = None
+            # A section with no page definition (hp:pagePr) opens in Hancom
+            # but renders blank — text has no page to lay out on.
+            if b"pagePr" not in archive.read("Contents/section0.xml"):
+                check.errors.append(
+                    "section0.xml에 페이지 정의(hp:pagePr)가 없어 Hancom에서 빈 문서로 보입니다. build-hwpx 재실행 필요."
+                )
             if section_root is not None:
                 paragraphs, tables = _count_elements(section_root)
                 body_text, headings, heading_count = _section_text_and_headings(section_root)
