@@ -7,10 +7,15 @@ body paragraphs, GFM tables mapped to `hp:tbl`, lists, and a generated
 table of contents. Images are copied into `BinData/` and referenced with a
 caption paragraph.
 
+The first paragraph of the section carries the page/section definition
+(`hp:secPr` with an A4 `hp:pagePr`). Without it Hancom opens the file but
+renders a blank document — the text has no page to lay out on.
+
 This produces a valid OWPML container. Because the harness cannot run
-Hancom, `render-check` validates the structure and the finalizer/human
-still confirm the visual result in Hancom — the harness never conflates
-"structure valid" with "renders correctly in Hancom".
+Hancom, `render-check` validates the structure (including that the page
+definition exists) and the finalizer/human still confirm the visual result
+in Hancom — the harness never conflates "structure valid" with "renders
+correctly in Hancom".
 """
 
 from __future__ import annotations
@@ -166,11 +171,60 @@ def _para_property(index: int) -> str:
     )
 
 
+# A4 page in HWPUNIT (1/7200 inch): 210mm x 297mm with report margins.
+def _sec_pr() -> str:
+    return (
+        '<hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000" '
+        'tabStopVal="4000" tabStopUnit="HWPUNIT" outlineShapeIDRef="0" memoShapeIDRef="0" '
+        'textVerticalWidthHead="0" masterPageCnt="0">'
+        '<hp:grid lineGrid="0" charGrid="0" wonggojiFormat="0" strtnum="0"/>'
+        '<hp:startNum pageStartsOn="BOTH" page="0" pic="0" tbl="0" equation="0"/>'
+        '<hp:visibility hideFirstHeader="0" hideFirstFooter="0" hideFirstMasterPage="0" '
+        'border="SHOW_ALL" fill="SHOW_ALL" hideFirstPageNum="0" hideFirstEmptyLine="0" showLineNumber="0"/>'
+        '<hp:lineNumberShape restartType="0" countBy="0" distance="0" startNumber="0"/>'
+        '<hp:pagePr landscape="0" width="59528" height="84188" gutterType="LEFT_ONLY">'
+        '<hp:margin header="4252" footer="4252" gutter="0" left="8504" right="8504" top="5668" bottom="4252"/>'
+        "</hp:pagePr>"
+        '<hp:footNotePr>'
+        '<hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar=")" supscript="0"/>'
+        '<hp:noteLine length="5666" type="SOLID" width="0.12 mm" color="#000000"/>'
+        '<hp:noteSpacing betweenNotes="0" belowLine="567" aboveLine="850"/>'
+        '<hp:numbering type="CONTINUOUS" newNum="1"/>'
+        '<hp:placement place="EACH_COLUMN" beneathText="0"/>'
+        "</hp:footNotePr>"
+        '<hp:endNotePr>'
+        '<hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar=")" supscript="0"/>'
+        '<hp:noteLine length="14692" type="SOLID" width="0.12 mm" color="#000000"/>'
+        '<hp:noteSpacing betweenNotes="0" belowLine="567" aboveLine="850"/>'
+        '<hp:numbering type="CONTINUOUS" newNum="1"/>'
+        '<hp:placement place="END_OF_DOCUMENT" beneathText="0"/>'
+        "</hp:endNotePr>"
+        '<hp:pageBorderFill type="BOTH" borderFillIDRef="0" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">'
+        '<hp:offset left="1417" right="1417" top="1417" bottom="1417"/></hp:pageBorderFill>'
+        '<hp:pageBorderFill type="EVEN" borderFillIDRef="0" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">'
+        '<hp:offset left="1417" right="1417" top="1417" bottom="1417"/></hp:pageBorderFill>'
+        '<hp:pageBorderFill type="ODD" borderFillIDRef="0" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER">'
+        '<hp:offset left="1417" right="1417" top="1417" bottom="1417"/></hp:pageBorderFill>'
+        "</hp:secPr>"
+    )
+
+
+def _secpr_paragraph() -> str:
+    # The first paragraph of a section carries the page/section definition.
+    # Without it Hancom opens the file but has no page to render text onto.
+    return (
+        f'<hp:p id="0" paraPrIDRef="{BODY_PARA}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">'
+        f'<hp:run charPrIDRef="0">{_sec_pr()}</hp:run>'
+        f'<hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>'
+        "</hp:p>"
+    )
+
+
 def _section_xml(body: str) -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
         f'<hs:sec xmlns:hs="{SECTION_NS}" xmlns:hp="{PARA_NS}">'
-        f"{body}"
+        f"{_secpr_paragraph()}{body}"
         "</hs:sec>"
     )
 
