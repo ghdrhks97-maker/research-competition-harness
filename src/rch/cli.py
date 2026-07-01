@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from rch import agents as agents_mod
 from rch import draft as draft_mod
 from rch import hwpx as hwpx_mod
 from rch import photos as photos_mod
@@ -416,9 +417,29 @@ def draft_cmd(workspace: Path) -> None:
     print(json.dumps({"drafted_lanes": written}, ensure_ascii=False, indent=2))
 
 
-def run_lanes_cmd(workspace: Path, agent: str, lanes: list[str] | None) -> None:
+def run_lanes_cmd(workspace: Path, agent: str, lanes: list[str] | None, execute: bool) -> int:
     manifest = run_lanes_mod.run_lanes(workspace, agent, lanes)
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
+    if not execute:
+        return 0
+
+    # Verify the agent CLI is installed and logged in before dispatching.
+    status = agents_mod.check_agent(agent)
+    print(json.dumps(status.to_dict(), ensure_ascii=False, indent=2))
+    if not status.installed:
+        print(f"[run-lanes] {agent} 미설치로 실제 호출을 건너뜀.")
+        return 1
+    if status.login_status == agents_mod.STATUS_UNAUTHENTICATED:
+        print(f"[run-lanes] {agent} 로그인되지 않아 실제 호출을 건너뜀. 먼저 로그인하세요.")
+        return 1
+
+    exit_code = 0
+    for entry in manifest["lanes"]:
+        result = agents_mod.run_agent_on_lane(workspace, agent, entry["lane"])
+        print(json.dumps(result.__dict__, ensure_ascii=False, indent=2))
+        if not result.ok:
+            exit_code = 1
+    return exit_code
 
 
 def build_hwpx_cmd(workspace: Path, output_path: Path | None) -> None:
@@ -454,6 +475,37 @@ def render_check_cmd(workspace: Path, hwpx_path: Path | None, page_limit: int) -
 def revise_loop_cmd(workspace: Path) -> None:
     backlog = revise_mod.run_revise_loop(workspace)
     print(json.dumps(backlog.to_dict(), ensure_ascii=False, indent=2))
+
+
+def agents_list_cmd() -> None:
+    registry = {
+        name: {
+            "bin": spec.default_bin,
+            "version_args": spec.version_args,
+            "auth_args": spec.auth_args,
+            "run_args": spec.run_args,
+        }
+        for name, spec in agents_mod.AGENT_REGISTRY.items()
+    }
+    print(json.dumps(registry, ensure_ascii=False, indent=2))
+
+
+def agents_preflight_cmd(workspace: Path, agents: list[str] | None, strict: bool) -> int:
+    report = agents_mod.run_preflight(workspace, agents)
+    print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+    if strict and not report.all_ready():
+        return 1
+    return 0
+
+
+def agents_run_cmd(workspace: Path, agent: str, lanes: list[str], timeout: int) -> int:
+    exit_code = 0
+    for lane in lanes:
+        result = agents_mod.run_agent_on_lane(workspace, agent, lane, timeout=timeout)
+        print(json.dumps(result.__dict__, ensure_ascii=False, indent=2))
+        if not result.ok:
+            exit_code = 1
+    return exit_code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -496,6 +548,9 @@ def main(argv: list[str] | None = None) -> int:
     run_lanes_p.add_argument("workspace")
     run_lanes_p.add_argument("agent")
     run_lanes_p.add_argument("--lanes", nargs="*", choices=LANES, help="subset of lanes")
+    run_lanes_p.add_argument(
+        "--execute", action="store_true", help="preflight login then actually call the agent CLI"
+    )
 
     hwpx_p = sub.add_parser("build-hwpx", help="build a .hwpx from the assembled bundle")
     hwpx_p.add_argument("workspace")
@@ -508,6 +563,23 @@ def main(argv: list[str] | None = None) -> int:
 
     revise_p = sub.add_parser("revise-loop", help="collect critic/check/render feedback into a backlog")
     revise_p.add_argument("workspace")
+
+    agent_names = tuple(agents_mod.AGENT_REGISTRY)
+    agents_p = sub.add_parser("agents", help="detect, verify login, and run external agent CLIs")
+    agents_sub = agents_p.add_subparsers(dest="agents_cmd", required=True)
+
+    agents_list_p = agents_sub.add_parser("list", help="show the agent CLI registry and defaults")
+
+    agents_pre_p = agents_sub.add_parser("preflight", help="check install + login for each agent CLI")
+    agents_pre_p.add_argument("workspace")
+    agents_pre_p.add_argument("--agents", nargs="*", choices=agent_names, help="subset of agents")
+    agents_pre_p.add_argument("--strict", action="store_true", help="exit 1 if any agent is not authenticated")
+
+    agents_run_p = agents_sub.add_parser("run", help="dispatch lane prompts to an agent CLI")
+    agents_run_p.add_argument("workspace")
+    agents_run_p.add_argument("agent", choices=agent_names)
+    agents_run_p.add_argument("--lanes", nargs="+", required=True, choices=LANES)
+    agents_run_p.add_argument("--timeout", type=int, default=agents_mod.RUN_TIMEOUT)
 
     args = parser.parse_args(argv)
 
@@ -540,8 +612,7 @@ def main(argv: list[str] | None = None) -> int:
         draft_cmd(Path(args.workspace))
         return 0
     if args.cmd == "run-lanes":
-        run_lanes_cmd(Path(args.workspace), args.agent, args.lanes)
-        return 0
+        return run_lanes_cmd(Path(args.workspace), args.agent, args.lanes, args.execute)
     if args.cmd == "build-hwpx":
         build_hwpx_cmd(Path(args.workspace), Path(args.output) if args.output else None)
         return 0
@@ -552,6 +623,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "revise-loop":
         revise_loop_cmd(Path(args.workspace))
         return 0
+    if args.cmd == "agents":
+        if args.agents_cmd == "list":
+            agents_list_cmd()
+            return 0
+        if args.agents_cmd == "preflight":
+            return agents_preflight_cmd(Path(args.workspace), args.agents, args.strict)
+        if args.agents_cmd == "run":
+            return agents_run_cmd(Path(args.workspace), args.agent, args.lanes, args.timeout)
+        raise AssertionError(args.agents_cmd)
     raise AssertionError(args.cmd)
 
 

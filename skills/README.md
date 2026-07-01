@@ -4,6 +4,7 @@
 
 | 단계 | 스킬 | 명령 |
 | --- | --- | --- |
+| 0 | agent-runner-skill | `rch agents preflight` / `rch agents run` |
 | 1 | input-intake-skill | `rch run-lanes` (intake) |
 | 2 | survey-analysis-skill | `rch import-survey` |
 | 3 | photo-privacy-curator-skill | `rch import-photos` |
@@ -20,6 +21,7 @@
 
 ```bash
 rch init 2026-competition
+rch agents preflight 2026-competition        # 에이전트 설치·로그인 확인
 # 자료 채우기: input/rules, input/references, input/ideas, input/surveys, input/photos, input/evidence
 rch import-survey 2026-competition input/surveys/pre-post.csv
 rch import-photos 2026-competition

@@ -22,11 +22,13 @@ It now also ships a generation engine, a render engine, and a quality loop:
 - `build-hwpx`: renders the assembled markdown bundle into an OWPML `.hwpx` container (headings, paragraphs, GFM tables, TOC, image embedding).
 - `render-check`: validates the `.hwpx` zip/OWPML structure, XML well-formedness, page estimate, table integrity, and TOC-vs-body heading match.
 - `revise-loop`: merges critic, check, and render-check feedback into one prioritized revision backlog.
-- `run-lanes`: builds per-lane prompt bundles for external agents (Codex/Antigravity/Claude/Gemini).
+- `run-lanes`: builds per-lane prompt bundles for external agents (Codex/Antigravity/Claude/Gemini); `--execute` verifies login then dispatches.
+- `agents preflight` / `agents run`: actually shell out to the external agent CLIs to confirm install, verify login by real process exit code, and dispatch lane prompts. Binaries and version/auth/run args are configurable via `RCH_AGENT_<NAME>_*` env vars.
 
 It still does not:
 
-- call external agents or Hancom by itself (it prepares prompt bundles and structurally-valid HWPX),
+- run Hancom by itself (it prepares structurally-valid HWPX; Hancom is the human render gate),
+- perform the initial login for each agent CLI (it detects and blocks on missing login, but the user logs in),
 - see photo pixels (privacy defaults to unreviewed until a human confirms),
 - prove Hancom-rendered page count (page count is an estimate; Hancom is the final human gate).
 
@@ -42,6 +44,7 @@ Main commands:
 
 ```bash
 PYTHONPATH=src python3 -m rch.cli init <workspace>
+PYTHONPATH=src python3 -m rch.cli agents preflight <workspace>
 PYTHONPATH=src python3 -m rch.cli bootstrap-lanes <workspace> <agent>
 PYTHONPATH=src python3 -m rch.cli import-survey <workspace> <file>
 PYTHONPATH=src python3 -m rch.cli import-photos <workspace>
