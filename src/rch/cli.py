@@ -9,6 +9,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from rch import draft as draft_mod
+from rch import hwpx as hwpx_mod
+from rch import photos as photos_mod
+from rch import references as references_mod
+from rch import render_check as render_check_mod
+from rch import revise as revise_mod
+from rch import run_lanes as run_lanes_mod
+from rch import survey as survey_mod
 from rch.lane_specs import FINAL_BUNDLE_FILES, LANE_SPECS, render_lane_input
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -383,6 +391,71 @@ def _evidence_exists(lane_dir: Path, evidence: Any) -> bool:
     return (lane_dir / evidence_path).exists() or (workspace / evidence_path).exists()
 
 
+def import_survey_cmd(workspace: Path, survey_path: Path) -> None:
+    output_dir = workspace / "input" / "surveys" / "analysis"
+    analysis = survey_mod.import_survey(survey_path, output_dir)
+    print(json.dumps(analysis.to_dict(), ensure_ascii=False, indent=2))
+
+
+def import_photos_cmd(workspace: Path) -> None:
+    source_dir = workspace / "input" / "photos"
+    output_dir = source_dir / "analysis"
+    manifest = photos_mod.import_photos(source_dir, output_dir)
+    print(json.dumps(manifest.to_dict(), ensure_ascii=False, indent=2))
+
+
+def mine_references_cmd(workspace: Path) -> None:
+    source_dir = workspace / "input" / "references"
+    output_dir = source_dir / "analysis"
+    report = references_mod.mine_references(source_dir, output_dir)
+    print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+
+
+def draft_cmd(workspace: Path) -> None:
+    written = draft_mod.generate_drafts(workspace)
+    print(json.dumps({"drafted_lanes": written}, ensure_ascii=False, indent=2))
+
+
+def run_lanes_cmd(workspace: Path, agent: str, lanes: list[str] | None) -> None:
+    manifest = run_lanes_mod.run_lanes(workspace, agent, lanes)
+    print(json.dumps(manifest, ensure_ascii=False, indent=2))
+
+
+def build_hwpx_cmd(workspace: Path, output_path: Path | None) -> None:
+    output_dir = workspace / "output"
+    bundle_paths = [output_dir / name for name in FINAL_BUNDLE_FILES if name != "finalization-checklist.md"]
+    existing = [path for path in bundle_paths if path.exists()]
+    if not existing:
+        raise SystemExit("no assembled bundle found; run `rch assemble` first")
+    target = output_path or (output_dir / "report.hwpx")
+    result = hwpx_mod.build_hwpx_from_bundle(existing, target, images_root=workspace)
+    summary = {
+        "hwpx": target.relative_to(workspace).as_posix() if target.is_relative_to(workspace) else str(target),
+        "paragraphs": result.paragraph_count,
+        "tables": result.table_count,
+        "headings": result.heading_count,
+        "images": result.image_count,
+        "embedded_images": result.embedded_images,
+        "missing_images": result.missing_images,
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
+def render_check_cmd(workspace: Path, hwpx_path: Path | None, page_limit: int) -> int:
+    target = hwpx_path or (workspace / "output" / "report.hwpx")
+    toc_path = workspace / "output" / "toc.md"
+    check = render_check_mod.run_render_check(
+        target, workspace / "output", toc_path=toc_path if toc_path.exists() else None, page_limit=page_limit
+    )
+    print(json.dumps(check.to_dict(), ensure_ascii=False, indent=2))
+    return 0 if check.ok else 1
+
+
+def revise_loop_cmd(workspace: Path) -> None:
+    backlog = revise_mod.run_revise_loop(workspace)
+    print(json.dumps(backlog.to_dict(), ensure_ascii=False, indent=2))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="rch")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -406,6 +479,36 @@ def main(argv: list[str] | None = None) -> int:
     check_p.add_argument("workspace")
     check_p.add_argument("--final", action="store_true", help="enforce final-candidate rules")
 
+    survey_p = sub.add_parser("import-survey", help="analyze a pre/post survey CSV/TSV/XLSX")
+    survey_p.add_argument("workspace")
+    survey_p.add_argument("survey", help="path to the survey file")
+
+    photos_p = sub.add_parser("import-photos", help="build photo manifest + privacy checklist")
+    photos_p.add_argument("workspace")
+
+    refs_p = sub.add_parser("mine-references", help="extract structure from reference reports")
+    refs_p.add_argument("workspace")
+
+    draft_p = sub.add_parser("draft", help="generate body/summary/toc/appendix drafts")
+    draft_p.add_argument("workspace")
+
+    run_lanes_p = sub.add_parser("run-lanes", help="generate per-lane prompt bundles for external agents")
+    run_lanes_p.add_argument("workspace")
+    run_lanes_p.add_argument("agent")
+    run_lanes_p.add_argument("--lanes", nargs="*", choices=LANES, help="subset of lanes")
+
+    hwpx_p = sub.add_parser("build-hwpx", help="build a .hwpx from the assembled bundle")
+    hwpx_p.add_argument("workspace")
+    hwpx_p.add_argument("--output", help="output .hwpx path")
+
+    render_p = sub.add_parser("render-check", help="validate a built .hwpx structure")
+    render_p.add_argument("workspace")
+    render_p.add_argument("--hwpx", help="path to the .hwpx (default output/report.hwpx)")
+    render_p.add_argument("--page-limit", type=int, default=render_check_mod.DEFAULT_PAGE_LIMIT)
+
+    revise_p = sub.add_parser("revise-loop", help="collect critic/check/render feedback into a backlog")
+    revise_p.add_argument("workspace")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "init":
@@ -424,6 +527,31 @@ def main(argv: list[str] | None = None) -> int:
         result = check_workspace(Path(args.workspace), final=args.final)
         print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
         return 0 if result.ok else 1
+    if args.cmd == "import-survey":
+        import_survey_cmd(Path(args.workspace), Path(args.survey))
+        return 0
+    if args.cmd == "import-photos":
+        import_photos_cmd(Path(args.workspace))
+        return 0
+    if args.cmd == "mine-references":
+        mine_references_cmd(Path(args.workspace))
+        return 0
+    if args.cmd == "draft":
+        draft_cmd(Path(args.workspace))
+        return 0
+    if args.cmd == "run-lanes":
+        run_lanes_cmd(Path(args.workspace), args.agent, args.lanes)
+        return 0
+    if args.cmd == "build-hwpx":
+        build_hwpx_cmd(Path(args.workspace), Path(args.output) if args.output else None)
+        return 0
+    if args.cmd == "render-check":
+        return render_check_cmd(
+            Path(args.workspace), Path(args.hwpx) if args.hwpx else None, args.page_limit
+        )
+    if args.cmd == "revise-loop":
+        revise_loop_cmd(Path(args.workspace))
+        return 0
     raise AssertionError(args.cmd)
 
 

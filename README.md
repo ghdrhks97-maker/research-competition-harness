@@ -20,14 +20,49 @@
   - `output/bundle-manifest.json`
 - `check --final`로 final bundle 누락, missing source lane, 금지 문구를 검사
 
-## 아직 자동으로 하지 않는 일
+## 생성 엔진 · 렌더 엔진 · 품질 루프
 
-- Codex, Antigravity, Claude, Gemini를 자동 호출하지 않음
-- raw 설문 스프레드시트나 사진을 자동 분석하지 않음
-- finished `.hwpx` 파일을 자동 생성하지 않음
-- Hancom/HOP 렌더 기준 페이지 수를 이 CLI 안에서 직접 검증하지 않음
+이제 하네스만으로 자료 → 분석 → 초안 → HWPX → 검증 → 수정까지 돌 수 있습니다.
 
-즉, 에이전트가 채워야 하는 `lane-output.md`, `claim-ledger.json`, `verdict.json`을 이 하네스가 대신 작성하지는 않습니다. 대신 “무엇을 어떻게 쓰고, 무엇을 쓰면 안 되는지”를 lane 지침으로 강하게 고정하고, 최종 병합 전 검사를 수행합니다.
+| 명령 | 하는 일 | 산출물 |
+| --- | --- | --- |
+| `rch import-survey <ws> <file>` | 사전·사후 설문 CSV/TSV/XLSX 익명 분석(평균·변화량·Cohen's d·t검정 p값·자유응답 요약·소표본 한계) | `input/surveys/analysis/` |
+| `rch import-photos <ws>` | 사진 매니페스트 + 개인정보 점검표(본문/요약/부록/제외 분류, 블러 지시) | `input/photos/analysis/` |
+| `rch mine-references <ws>` | 레퍼런스 보고서에서 목차·표 밀도·부록 패턴 등 **구조만** 추출 | `input/references/analysis/` |
+| `rch draft <ws>` | 분석 결과로 I~V장 본문·요약서·목차·부록 초안 생성(claim 태그 부착) | 쓰기 lane 4종 |
+| `rch run-lanes <ws> <agent>` | lane별 프롬프트 번들 생성(외부 에이전트 배정용) | `prompts/<agent>/` |
+| `rch build-hwpx <ws>` | 조립된 bundle → HWPX(OWPML zip) 렌더 | `output/report.hwpx` |
+| `rch render-check <ws>` | HWPX 구조·XML·페이지 추정·목차-본문 일치·표 무결성 검증 | `output/render-check.{json,md}` |
+| `rch revise-loop <ws>` | critic·check·render-check 피드백을 우선순위 수정 백로그로 통합 | `output/revision-tasks.{json,md}` |
+
+한 번에 도는 흐름:
+
+```bash
+rch init 2026-competition
+# input/rules, input/references, input/ideas, input/surveys, input/photos, input/evidence 채우기
+rch import-survey 2026-competition input/surveys/pre-post.csv
+rch import-photos 2026-competition
+rch mine-references 2026-competition
+rch draft 2026-competition
+rch assemble 2026-competition
+rch check 2026-competition --final
+rch build-hwpx 2026-competition
+rch render-check 2026-competition
+rch revise-loop 2026-competition
+```
+
+각 명령은 `skills/` 아래 스킬 팩(`survey-analysis-skill` 등)으로 문서화되어 있습니다.
+
+## 여전히 사람이 확정하는 일
+
+- Codex/Antigravity/Claude/Gemini의 실제 호출(하네스는 프롬프트 번들만 생성)
+- 사진 픽셀의 얼굴·이름·학번 노출 최종 확인
+- Hancom/HOP에서 실제로 열어 페이지 수·목차 번호·표 흐름·이미지 겹침 최종 확인
+- 자유응답 인용의 학생 동의·익명화 확정
+
+`build-hwpx`는 구조적으로 유효한 OWPML 컨테이너를 만들지만, 구조 통과가 Hancom 실제 표시를 보장하지는 않습니다. 렌더 품질의 최종 판정은 사람이 Hancom에서 확인합니다.
+
+XLSX 분석에는 `openpyxl`이 필요합니다(`pip install .[xlsx]`). CSV/TSV는 추가 의존성 없이 동작합니다.
 
 ## 설치 없이 실행
 

@@ -13,14 +13,24 @@ It currently:
 - assembles lane outputs into report/summary/toc/appendix/checklist markdown bundle,
 - blocks final bundle completion when required bundle files or source lanes are missing.
 
-It does not currently:
+It now also ships a generation engine, a render engine, and a quality loop:
 
-- call Codex, Antigravity, Claude, Gemini, or Hancom by itself,
-- read raw photos or survey spreadsheets automatically,
-- generate a finished `.hwpx` file,
-- prove Hancom-rendered page count.
+- `import-survey`: anonymized pre/post survey analysis (means, deltas, Cohen's d, two-sided t-test p-value, free-response summary, small-sample caveats) with pure-stdlib statistics.
+- `import-photos`: photo manifest + privacy checklist (safe-by-default `unreviewed`, blur instructions, body/summary/appendix/exclude placement).
+- `mine-references`: structure-only extraction (outline, table density, appendix pattern) from `.md`/`.txt`/`.hwpx` references.
+- `draft`: composes I~V body, summary, TOC, and appendix drafts from the analyses into the writing lanes with claim tags.
+- `build-hwpx`: renders the assembled markdown bundle into an OWPML `.hwpx` container (headings, paragraphs, GFM tables, TOC, image embedding).
+- `render-check`: validates the `.hwpx` zip/OWPML structure, XML well-formedness, page estimate, table integrity, and TOC-vs-body heading match.
+- `revise-loop`: merges critic, check, and render-check feedback into one prioritized revision backlog.
+- `run-lanes`: builds per-lane prompt bundles for external agents (Codex/Antigravity/Claude/Gemini).
 
-External agents or humans still fill lane outputs. The harness keeps those outputs organized and safer to merge.
+It still does not:
+
+- call external agents or Hancom by itself (it prepares prompt bundles and structurally-valid HWPX),
+- see photo pixels (privacy defaults to unreviewed until a human confirms),
+- prove Hancom-rendered page count (page count is an estimate; Hancom is the final human gate).
+
+Modules: `survey.py`/`stats.py`, `photos.py`, `references.py`, `draft.py`, `hwpx.py`/`docmodel.py`, `render_check.py`, `revise.py`, `run_lanes.py`.
 
 ## Conductor + Lanes
 
@@ -33,8 +43,15 @@ Main commands:
 ```bash
 PYTHONPATH=src python3 -m rch.cli init <workspace>
 PYTHONPATH=src python3 -m rch.cli bootstrap-lanes <workspace> <agent>
+PYTHONPATH=src python3 -m rch.cli import-survey <workspace> <file>
+PYTHONPATH=src python3 -m rch.cli import-photos <workspace>
+PYTHONPATH=src python3 -m rch.cli mine-references <workspace>
+PYTHONPATH=src python3 -m rch.cli draft <workspace>
 PYTHONPATH=src python3 -m rch.cli assemble <workspace>
 PYTHONPATH=src python3 -m rch.cli check <workspace> --final
+PYTHONPATH=src python3 -m rch.cli build-hwpx <workspace>
+PYTHONPATH=src python3 -m rch.cli render-check <workspace>
+PYTHONPATH=src python3 -m rch.cli revise-loop <workspace>
 ```
 
 ## Lane Set
