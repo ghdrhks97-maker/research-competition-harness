@@ -21,7 +21,7 @@ backing_command: rch brainstorm <workspace> [--answers file.json] [--agent <name
 rch brainstorm my-competition                      # 대화형
 rch init my-competition --brainstorm               # init 직후 실행
 rch brainstorm my-competition --answers a.json     # 비대화형(자동화/테스트)
-rch brainstorm my-competition --agent gemini       # 트렌드 리서치 보강
+rch brainstorm my-competition --agent claude       # 트렌드 리서치 보강
 ```
 
 ## 금지선

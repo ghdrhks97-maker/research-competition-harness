@@ -1,6 +1,6 @@
 """External agent runner (`rch agents ...`).
 
-Actually shells out to the external agent CLIs — Codex, Claude, Gemini,
+Actually shells out to the external agent CLIs — Codex, Claude,
 Antigravity — to (1) confirm each is installed, (2) verify the user is
 logged in, and (3) dispatch a lane prompt to a chosen agent and capture
 its response.
@@ -42,7 +42,6 @@ class AgentSpec:
 AGENT_REGISTRY: dict[str, AgentSpec] = {
     "codex": AgentSpec("codex", "codex", ["--version"], ["login", "status"], ["exec", "{prompt}"]),
     "claude": AgentSpec("claude", "claude", ["--version"], [], ["-p", "{prompt}"]),
-    "gemini": AgentSpec("gemini", "gemini", ["--version"], ["auth", "status"], ["-p", "{prompt}"]),
     "antigravity": AgentSpec("antigravity", "antigravity", ["--version"], [], ["{prompt}"]),
 }
 

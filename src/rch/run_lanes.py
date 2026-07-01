@@ -3,7 +3,7 @@
 The harness does not embed external agents. Instead it builds a portable
 prompt bundle per lane: the lane instruction plus a listing of the input
 files that lane should read, plus the exact output contract. Hand each
-bundle to Codex, Antigravity, Claude, Gemini, or a person. A run manifest
+bundle to Codex, Antigravity, Claude, or a person. A run manifest
 records which lanes were prepared so a conductor can dispatch them.
 """
 
