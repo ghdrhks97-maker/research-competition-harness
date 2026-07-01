@@ -80,6 +80,25 @@ rch revise-loop 2026-competition
 
 각 명령은 `skills/` 아래 스킬 팩(`survey-analysis-skill` 등)으로 문서화되어 있습니다.
 
+## 에이전트 오케스트레이션 모드 (실제 집필) — 권장
+
+`rch` CLI는 결정적 **골격(placeholder)** 만 만듭니다. 실제 보고서 문장은 LLM이 써야 좋은 결과가 나옵니다. 웹툰 하네스처럼 **Claude Code가 lane별 전문 서브에이전트를 조율**해 실제 내용을 채우는 모드를 추가했습니다.
+
+```
+.claude/skills/report-orchestrator/   # 진입점 스킬
+.claude/agents/                        # draft-writer, survey-analyst, critic, finalizer ...
+```
+
+작업공간 폴더에서 Claude Code를 열고 자연어로 요청하면 오케스트레이터가 6단계(인터뷰 → rch 분석 → 서브에이전트 집필 → 비평·검증 루프 → 조립·렌더)로 진행합니다.
+
+```
+claude
+> 2026-음악대회로 교실수업개선 실천사례 연구대회, 음악, 중2, AI·에듀테크, 음악적 창의융합 역량
+  중심으로 연구보고서 만들어줘. 설문은 survey.csv, 사진은 photos/ 에 있어.
+```
+
+하이브리드 원칙: **`rch`는 분석·렌더·검증(숫자 안 만듦), 에이전트는 집필·종합·비평(숫자 안 지어냄)**. 자세한 내용은 [`docs/agent-orchestration.md`](docs/agent-orchestration.md).
+
 ## Claude Code / Codex / AGY에서 MCP로 쓰기
 
 CLI로 직접 돌리는 대신 **Claude Code, Codex, AGY가 하네스 기능을 도구로 호출**하게 하려면 MCP 서버를 씁니다.
