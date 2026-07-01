@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Real report artifacts stay out of this repo.
+*.hwpx
+*.hwp
+*.pdf
+*.zip
+input/evidence/*
+input/class_photos/*
+output/*
+!examples/synthetic/**
