@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from rch import rules as rules_mod
+
 DRAFT_AGENT = "harness-draft"
 
 DEFAULT_OUTLINE = [
@@ -33,6 +35,7 @@ DEFAULT_OUTLINE = [
 
 @dataclass
 class DraftContext:
+    competition_name: str
     title: str
     outline: list[str]
     background_md: str
@@ -73,6 +76,8 @@ def _strip_title(markdown_text: str) -> str:
 
 
 def gather_context(workspace: Path) -> DraftContext:
+    profile = rules_mod.load_competition_profile(workspace)
+    competition_name = str(profile.get("competition_name") or "연구대회")
     outline_report = _read_json(workspace / "input" / "references" / "analysis" / "reference-pattern.json")
     outline = DEFAULT_OUTLINE
     if isinstance(outline_report, dict) and outline_report.get("recommended_outline"):
@@ -102,6 +107,7 @@ def gather_context(workspace: Path) -> DraftContext:
     title = _extract_title(brainstorm) or "연구대회 보고서 제목(확정 필요)"
 
     return DraftContext(
+        competition_name=competition_name,
         title=title,
         outline=outline,
         background_md=background_md,
@@ -181,7 +187,7 @@ def _slug(text: str) -> str:
 
 
 def build_report_body(context: DraftContext) -> tuple[str, list[dict[str, Any]]]:
-    lines = [f"# {context.title}", ""]
+    lines = [f"# {context.title}", "", f"- 참가 대회: {context.competition_name}", ""]
     claims: list[dict[str, Any]] = []
     has_background_section = any("이론" in heading or "배경" in heading or "선행" in heading for heading in context.outline)
     for heading in context.outline:
@@ -201,6 +207,7 @@ def build_summary(context: DraftContext) -> tuple[str, list[dict[str, Any]]]:
     lines = [
         "# 요약서",
         "",
+        f"- 대회: {context.competition_name}",
         f"- 제목: {context.title}",
         "- 문제의식: [한 줄로 확정]",
         "- 수업 모형: [brainstorm lane 결과로 확정]",

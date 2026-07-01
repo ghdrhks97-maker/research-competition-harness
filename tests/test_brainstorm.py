@@ -11,6 +11,7 @@ from rch.draft import gather_context
 
 
 ANSWERS = {
+    "competition_name": "수업혁신사례 연구대회",
     "major": "과학",
     "level": "중학교 2학년",
     "class_context": "28명",
@@ -31,6 +32,9 @@ class BrainstormLogicTests(unittest.TestCase):
                             [(trend.name, score) for trend, score in ranked[:3]]))
         self.assertTrue(top)
 
+    def test_interview_asks_competition_first(self) -> None:
+        self.assertEqual(brainstorm.INTERVIEW[0]["key"], "competition_name")
+
     def test_build_bundle_produces_topics_and_titles(self) -> None:
         bundle = brainstorm.build_bundle(ANSWERS)
         self.assertEqual(len(bundle.topics), 3)
@@ -40,8 +44,9 @@ class BrainstormLogicTests(unittest.TestCase):
         self.assertNotIn("활", bundle.titles[0].split("』")[0])
 
     def test_interview_uses_ask_callable(self) -> None:
-        scripted = iter(["과학", "", "", "", "", "", ""])
+        scripted = iter(["수업혁신사례 연구대회", "과학", "", "", "", "", "", ""])
         answers = brainstorm.run_interview(ask=lambda q: next(scripted))
+        self.assertEqual(answers["competition_name"], "수업혁신사례 연구대회")
         self.assertEqual(answers["major"], "과학")
         # Non-required blanks fall back to defaults.
         self.assertEqual(answers["competency"], "핵심 역량")

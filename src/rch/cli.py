@@ -18,6 +18,7 @@ from rch import photos as photos_mod
 from rch import references as references_mod
 from rch import render_check as render_check_mod
 from rch import revise as revise_mod
+from rch import rules as rules_mod
 from rch import run_lanes as run_lanes_mod
 from rch import survey as survey_mod
 from rch.lane_specs import FINAL_BUNDLE_FILES, LANE_SPECS, render_lane_input
@@ -85,7 +86,7 @@ def init_workspace(target: Path) -> None:
     shutil.copytree(TEMPLATE, target, dirs_exist_ok=True)
     _ensure_input_dirs(target)
     print(f"initialized {target}")
-    print("다음 단계: `rch brainstorm <workspace>` 로 전공 인터뷰 → 트렌드 리서치 → 주제·제목을 자동 생성해 input/ideas/에 채웁니다.")
+    print("다음 단계: `rch brainstorm <workspace>` 로 대회명·분야 인터뷰 → 연구 동향 → 주제·제목을 자동 생성해 input/ideas/에 채웁니다.")
 
 
 def create_lane(workspace: Path, lane: str, agent: str) -> None:
@@ -144,6 +145,7 @@ def _ensure_input_dirs(workspace: Path) -> None:
         keep = target / ".gitkeep"
         if not keep.exists():
             keep.write_text("\n", encoding="utf-8")
+    rules_mod.rules_root(workspace)
 
 
 def _render_assembled_file(
@@ -565,6 +567,11 @@ def import_photos_cmd(workspace: Path) -> None:
     print(json.dumps(manifest.to_dict(), ensure_ascii=False, indent=2))
 
 
+def import_rules_cmd(workspace: Path, files: list[Path]) -> None:
+    report = rules_mod.import_rule_files(workspace, files)
+    print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+
+
 def mine_references_cmd(workspace: Path) -> None:
     source_dir = workspace / "input" / "references"
     output_dir = source_dir / "analysis"
@@ -652,6 +659,7 @@ def brainstorm_cmd(
     answers_path: Path | None,
     agent: str | None,
     research_background: bool = False,
+    competition_name: str | None = None,
 ) -> None:
     answers: dict[str, str] | None = None
     if answers_path is not None:
@@ -659,6 +667,9 @@ def brainstorm_cmd(
         if not isinstance(loaded, dict):
             raise SystemExit("--answers 파일은 JSON 객체여야 합니다.")
         answers = {str(key): str(value) for key, value in loaded.items()}
+    if competition_name:
+        answers = answers or {}
+        answers["competition_name"] = competition_name
     bundle = brainstorm_mod.run_brainstorm(workspace, answers=answers, agent=agent)
     research_written: list[str] = []
     research_source_count = 0
@@ -696,6 +707,7 @@ def _load_answers(path: Path | None) -> dict[str, str] | None:
 
 def _answers_from_options(args: argparse.Namespace) -> dict[str, str]:
     answers = {
+        "competition_name": args.competition_name or "",
         "major": args.major or "",
         "level": args.level or "",
         "class_context": args.class_context or "",
@@ -822,6 +834,7 @@ def _seed_go_review_lanes(workspace: Path, missing_inputs: list[dict[str, Any]])
 def go_workspace(
     workspace: Path,
     answers: dict[str, str] | None = None,
+    rule_files: list[Path] | None = None,
     survey_path: Path | None = None,
     offline_research: bool = False,
     survey_items: int = survey_mod.DEFAULT_REQUIRED_SURVEY_ITEMS,
@@ -836,6 +849,11 @@ def go_workspace(
         summary["steps"].append("init")
     else:
         _ensure_input_dirs(workspace)
+
+    if rule_files:
+        imported = rules_mod.import_rule_files(workspace, rule_files)
+        summary["rule_files"] = imported.to_dict()
+        summary["steps"].append("import-rules")
 
     brainstorm_json = workspace / "input" / "ideas" / "brainstorm.json"
     if not brainstorm_json.exists():
@@ -929,16 +947,19 @@ def go_cmd(
     workspace: Path,
     answers_path: Path | None,
     option_answers: dict[str, str],
+    rule_files: list[Path] | None,
     survey_path: Path | None,
     offline_research: bool,
     survey_items: int,
     photo_count: int,
     skip_hwpx: bool,
 ) -> None:
-    answers = _load_answers(answers_path) or option_answers or None
+    loaded_answers = _load_answers(answers_path) or {}
+    answers = {**loaded_answers, **{key: value for key, value in option_answers.items() if value}} or None
     summary = go_workspace(
         workspace,
         answers=answers,
+        rule_files=rule_files,
         survey_path=survey_path,
         offline_research=offline_research,
         survey_items=survey_items,
@@ -991,12 +1012,14 @@ def main(argv: list[str] | None = None) -> int:
     brainstorm_p = sub.add_parser("brainstorm", help="interview → trend research → topic/title → input/ideas/")
     brainstorm_p.add_argument("workspace")
     brainstorm_p.add_argument("--answers", help="JSON file of interview answers (non-interactive)")
+    brainstorm_p.add_argument("--competition-name", help="참가 예정 연구대회명")
     brainstorm_p.add_argument("--agent", choices=tuple(agents_mod.AGENT_REGISTRY), help="augment trend research via an agent CLI")
     brainstorm_p.add_argument("--research-background", action="store_true", help="run public-route theory/prior-research collection after topic selection")
 
     go_p = sub.add_parser("go", help="short autopilot: brainstorm → research → placeholders → draft → hwpx")
     go_p.add_argument("workspace")
     go_p.add_argument("--answers", help="JSON file of interview answers (non-interactive)")
+    go_p.add_argument("--competition-name", default="", help="참가 예정 연구대회명")
     go_p.add_argument("--major", help="전공 교과")
     go_p.add_argument("--level", default="", help="학교급/학년")
     go_p.add_argument("--class-context", default="", help="학급/수업 상황")
@@ -1004,6 +1027,7 @@ def main(argv: list[str] | None = None) -> int:
     go_p.add_argument("--tools", default="", help="활용 도구")
     go_p.add_argument("--competency", default="", help="목표 역량")
     go_p.add_argument("--constraints", default="", help="제약 조건")
+    go_p.add_argument("--rule-file", action="append", default=[], help="대회 공문/양식/심사표 파일 또는 폴더")
     go_p.add_argument("--survey", help="설문 CSV/TSV/XLSX 경로. 없으면 input/surveys에서 자동 탐색")
     go_p.add_argument("--survey-items", type=int, default=survey_mod.DEFAULT_REQUIRED_SURVEY_ITEMS)
     go_p.add_argument("--photo-count", type=int, default=photos_mod.DEFAULT_REQUIRED_PHOTOS)
@@ -1032,6 +1056,10 @@ def main(argv: list[str] | None = None) -> int:
 
     photos_p = sub.add_parser("import-photos", help="build photo manifest + privacy checklist")
     photos_p.add_argument("workspace")
+
+    rules_p = sub.add_parser("import-rules", help="copy competition notice/rubric/form files into input/rules")
+    rules_p.add_argument("workspace")
+    rules_p.add_argument("files", nargs="+", help="대회 공문/양식/심사표 파일 또는 폴더")
 
     refs_p = sub.add_parser("mine-references", help="extract structure from reference reports")
     refs_p.add_argument("workspace")
@@ -1097,6 +1125,7 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.answers) if args.answers else None,
             args.agent,
             research_background=args.research_background,
+            competition_name=args.competition_name,
         )
         return 0
     if args.cmd == "go":
@@ -1104,6 +1133,7 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.workspace),
             Path(args.answers) if args.answers else None,
             _answers_from_options(args),
+            [Path(path) for path in args.rule_file],
             Path(args.survey) if args.survey else None,
             args.offline_research,
             args.survey_items,
@@ -1129,6 +1159,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "import-photos":
         import_photos_cmd(Path(args.workspace))
+        return 0
+    if args.cmd == "import-rules":
+        import_rules_cmd(Path(args.workspace), [Path(path) for path in args.files])
         return 0
     if args.cmd == "mine-references":
         mine_references_cmd(Path(args.workspace))

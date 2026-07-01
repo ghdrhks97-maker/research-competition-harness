@@ -28,10 +28,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from rch import rules as rules_mod
+
 BRAINSTORM_AGENT = "harness-brainstorm"
 
 # Interview script. key, question, required, default (used in scripted mode).
 INTERVIEW: list[dict[str, Any]] = [
+    {"key": "competition_name", "q": "어떤 연구대회에 참가할 예정입니까? (예: 수업혁신사례 연구대회, 과학전람회, 교육자료전)", "required": False, "default": "연구대회"},
     {"key": "major", "q": "전공 교과가 무엇입니까? (예: 과학, 국어, 수학, 영어, 사회, 미술, 체육, 초등)", "required": True, "default": ""},
     {"key": "level", "q": "학교급/학년은? (예: 중학교 2학년)", "required": False, "default": "미기재"},
     {"key": "class_context", "q": "학급/수업 상황을 한 줄로? (인원, 특징)", "required": False, "default": "미기재"},
@@ -130,6 +133,7 @@ def rank_trends(answers: dict[str, str]) -> list[tuple[Trend, int]]:
 
 
 def synthesize_topics(answers: dict[str, str], ranked: list[tuple[Trend, int]], limit: int = 3) -> list[TopicCandidate]:
+    competition = answers.get("competition_name", "").strip() or "연구대회"
     major = answers.get("major", "").strip() or "교과"
     competency = answers.get("competency", "").strip() or "핵심 역량"
     tools = answers.get("tools", "").strip()
@@ -142,28 +146,29 @@ def synthesize_topics(answers: dict[str, str], ranked: list[tuple[Trend, int]], 
                 title_seed=f"{trend.name} 기반 {major} 수업",
                 research_question=f"{trend.name}을(를) 적용한{tool_clause} {major} 수업이 학생의 {competency} 신장에 어떤 영향을 주는가?",
                 practical_tasks=[
-                    f"실천1: {trend.name}에 맞춘 {major} 수업 모형 설계",
+                    f"실천1: {competition} 규정에 맞춘 {trend.name} 기반 {major} 연구 설계",
                     f"실천2: 수업 단계별 {competency} 중심 활동·평가 개발",
-                    f"실천3: 사전·사후 변화 측정과 결과 일반화",
+                    f"실천3: {competition} 심사 기준에 맞춘 변화 근거와 일반화 가능성 정리",
                 ],
                 score=score,
-                rationale=f"{trend.summary} 전공({major})·역량({competency}) 적합도 점수 {score}.",
+                rationale=f"{trend.summary} 대회({competition})·분야({major})·역량({competency}) 적합도 점수 {score}.",
             )
         )
     return topics
 
 
 def brainstorm_titles(topic: TopicCandidate, answers: dict[str, str]) -> list[str]:
+    competition = answers.get("competition_name", "").strip() or "연구대회"
     major = answers.get("major", "").strip() or "교과"
     competency = answers.get("competency", "").strip() or "핵심 역량"
     trend = topic.trend
     acronym = _acronym(trend, competency)
     return [
-        f"『{acronym}』: {trend}으로 {competency}을(를) 키우는 {major} 수업 실천",
-        f"{trend}을(를) 만난 {major}: {competency} 신장을 위한 수업 설계와 실천",
-        f"{major} 교실의 전환 — {trend} 기반 {competency} 중심 수업 연구",
+        f"『{acronym}』: {trend}으로 {competency}을(를) 키우는 {major} 연구",
+        f"{competition}을 위한 {major} 연구: {trend} 기반 {competency} 신장 사례",
+        f"{major} 현장의 전환 — {trend} 기반 {competency} 중심 연구",
         f"묻고 만들고 나누다: {major} 속 {trend}로 기르는 {competency}",
-        f"{competency}을(를) 위한 {trend} 수업 모형 개발과 적용: {major} 사례",
+        f"{competency}을(를) 위한 {trend} 연구 모형 개발과 적용: {major} 사례",
     ]
 
 
@@ -201,7 +206,12 @@ def render_interview_md(bundle: BrainstormBundle) -> str:
 
 
 def render_trend_md(bundle: BrainstormBundle) -> str:
-    lines = ["# 교육 트렌드 리서치", "", f"전공: {bundle.answers.get('major', '')}", "",
+    lines = [
+        "# 연구 동향 리서치",
+        "",
+        f"대회: {bundle.answers.get('competition_name', '연구대회')}",
+        f"분야/교과: {bundle.answers.get('major', '')}",
+        "",
              "| 트렌드 | 적합도 | 요약 |", "| --- | --- | --- |"]
     for trend in bundle.trends:
         lines.append(f"| {trend['name']} | {trend['score']} | {trend['summary']} |")
@@ -252,6 +262,7 @@ def _seed_brainstorm_lane(workspace: Path, bundle: BrainstormBundle) -> None:
     body = [
         f"# {title}",
         "",
+        f"- 참가 대회: {bundle.answers.get('competition_name', '연구대회')}",
         f"- 연구 주제: {topic.title_seed}",
         f"- 연구 질문: {topic.research_question}",
         "- 실천 과제:",
@@ -297,6 +308,12 @@ def write_ideas(workspace: Path, bundle: BrainstormBundle) -> list[str]:
     for name, content in files.items():
         (ideas_dir / name).write_text(content, encoding="utf-8")
         written.append(f"input/ideas/{name}")
+    profile = {
+        "competition_name": bundle.answers.get("competition_name", "연구대회"),
+        "major": bundle.answers.get("major", ""),
+        "level": bundle.answers.get("level", ""),
+    }
+    rules_mod.write_competition_profile(workspace, profile)
     _seed_brainstorm_lane(workspace, bundle)
     return written
 
@@ -311,6 +328,8 @@ def run_brainstorm(
         raise SystemExit(f"workspace missing: {workspace}")
     if answers is None:
         answers = run_interview(ask)
+    else:
+        answers = _with_interview_defaults(answers)
     if not answers.get("major"):
         raise SystemExit("전공 교과(major)는 필수입니다.")
     bundle = build_bundle(answers)
@@ -330,8 +349,9 @@ def _augment_with_agent(workspace: Path, agent: str, bundle: BrainstormBundle) -
     if not status.installed or status.login_status == agents_mod.STATUS_UNAUTHENTICATED:
         return
     prompt = (
-        f"전공 교과 '{bundle.answers.get('major')}' 관련 최신 한국 교육 트렌드 3가지와 "
-        f"연구대회에 적합한 수업혁신 연구 주제를 간단히 제안해줘. 사실만."
+        f"'{bundle.answers.get('competition_name', '연구대회')}' 참가용으로 "
+        f"분야 '{bundle.answers.get('major')}' 관련 최신 연구 동향 3가지와 "
+        f"보고서에 적합한 연구 주제를 간단히 제안해줘. 사실만."
     )
     prompt_dir = workspace / "prompts" / agent
     prompt_dir.mkdir(parents=True, exist_ok=True)
@@ -342,3 +362,10 @@ def _augment_with_agent(workspace: Path, agent: str, bundle: BrainstormBundle) -
     except (SystemExit, OSError):
         return
     bundle.agent_augmented = bool(result.ok)
+
+
+def _with_interview_defaults(answers: dict[str, str]) -> dict[str, str]:
+    merged = {item["key"]: str(item["default"]) for item in INTERVIEW}
+    for key, value in answers.items():
+        merged[str(key)] = str(value)
+    return merged

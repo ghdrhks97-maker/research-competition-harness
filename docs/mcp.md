@@ -1,9 +1,9 @@
-# MCP 서버로 Claude Code / Codex에서 쓰기
+# MCP 서버로 Claude Code / Codex / AGY에서 쓰기
 
-하네스를 CLI로 직접 돌리는 대신, **Claude Code나 Codex가 하네스 기능을 도구(tool)로 호출**하게 하려면 MCP 서버를 씁니다. 제어 방향이 바뀝니다.
+하네스를 CLI로 직접 돌리는 대신, **Claude Code, Codex, AGY가 하네스 기능을 도구(tool)로 호출**하게 하려면 MCP 서버를 씁니다. 제어 방향이 바뀝니다.
 
 ```
-Claude Code / Codex  ──MCP 도구 호출──▶  rch 엔진(brainstorm/import_survey/draft/build_hwpx…)
+Claude Code / Codex / AGY  ──MCP 도구 호출──▶  rch 엔진(brainstorm/import_survey/draft/build_hwpx…)
 ```
 
 ## 설치
@@ -17,9 +17,10 @@ pip install -e ".[mcp]"     # mcp 패키지 포함 설치
 
 | 도구 | 하는 일 |
 | --- | --- |
-| `go(workspace, major?, ...)` | 브레인스토밍부터 HWPX 렌더 점검까지 자동 실행. 설문/사진 없으면 placeholder 표 생성 |
+| `go(workspace, competition_name?, major?, rule_files?, ...)` | 브레인스토밍부터 HWPX 렌더 점검까지 자동 실행. 양식 파일 저장, 설문/사진 placeholder 생성 |
 | `init(workspace)` | 작업공간 생성 |
-| `brainstorm(workspace, major, level?, class_context?, interests?, tools?, competency?, constraints?)` | 인터뷰 답 → 트렌드·주제·제목 → input/ideas |
+| `import_rules(workspace, rule_files)` | 첨부/로컬 대회 공문·심사표·보고서 양식 파일을 `input/rules`에 저장 |
+| `brainstorm(workspace, major, competition_name?, level?, class_context?, interests?, tools?, competency?, constraints?)` | 대회명·인터뷰 답 → 동향·주제·제목 → input/ideas |
 | `research_background(workspace, query?, max_results?, offline?)` | 공개 route scheduler로 이론적 배경·선행연구 후보 수집 |
 | `import_survey(workspace, survey_path)` | 사전·사후 설문 익명 분석 |
 | `import_photos(workspace)` | 사진 개인정보 점검표 |
@@ -85,15 +86,15 @@ command = "rch-mcp"
 
 짧은 전체 실행:
 
-> "rch MCP의 `go`를 사용해 `2026-대회` 작업공간을 만들어줘. 전공은 과학, 관심은 AI·탐구, 목표 역량은 탐구력. 설문이나 사진이 없으면 필요한 항목 표를 넣고 HWPX까지 만들어줘."
+> "rch MCP의 `go`를 사용해 `2026-대회` 작업공간을 만들어줘. 참가 대회는 창의교육 연구대회, 전공은 과학, 관심은 AI·탐구, 목표 역량은 탐구력. 첨부한 보고서 양식은 input/rules에 저장해서 참고하고, 설문이나 사진이 없으면 필요한 항목 표를 넣고 HWPX까지 만들어줘."
 
 자료가 있는 경우 세부 실행:
 
-> "`2026-대회` 작업공간 만들고, 전공은 과학, 관심은 AI·탐구로 브레인스토밍해줘. 배경지식과 선행연구도 리서치하고, 그다음 `~/survey.csv` 설문 분석하고 초안까지 만들어줘."
+> "`2026-대회` 작업공간 만들고, 참가 대회는 과학전람회, 전공은 과학, 관심은 AI·탐구로 브레인스토밍해줘. 첨부한 양식 파일은 `import_rules`로 저장하고, 배경지식과 선행연구도 리서치하고, 그다음 `~/survey.csv` 설문 분석하고 초안까지 만들어줘."
 
 에이전트가 순서대로 `init → brainstorm → research_background → import_survey → draft → assemble → check`를 도구로 호출합니다.
 
-`go`는 내부에서 `init → brainstorm → research_background → import_survey 또는 설문 placeholder → import_photos 또는 사진 placeholder → mine_references → draft → assemble → check → build_hwpx → render_check → revise_loop`를 실행합니다.
+`go`는 내부에서 `init → import_rules(파일이 있으면) → brainstorm → research_background → import_survey 또는 설문 placeholder → import_photos 또는 사진 placeholder → mine_references → draft → assemble → check → build_hwpx → render_check → revise_loop`를 실행합니다.
 
 ## 참고
 

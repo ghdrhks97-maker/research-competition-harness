@@ -1,6 +1,6 @@
 ---
 name: input-intake-skill
-description: 공문, 심사표, 아이디어, 사진, 설문, 활동지를 자동 분류하고 개인정보 위험을 표시한다.
+description: 공문, 심사표, 보고서 양식, 아이디어, 사진, 설문, 활동지를 자동 분류하고 개인정보 위험을 표시한다.
 backing_command: rch run-lanes <workspace> <agent> --lanes intake
 ---
 
@@ -19,6 +19,7 @@ backing_command: rch run-lanes <workspace> <agent> --lanes intake
 ```bash
 rch run-lanes my-competition codex --lanes intake   # intake 프롬프트 번들 생성
 # 이어서 자동 분석:
+rch import-rules my-competition input/rules/<file>.hwpx
 rch import-survey my-competition input/surveys/<file>.csv
 rch import-photos my-competition
 rch mine-references my-competition

@@ -6,7 +6,7 @@ Put only current competition inputs here. Do not commit raw student data.
 
 - `input/ideas/`: teacher notes, rough report ideas, model names.
 - `input/research/`: theory background and prior-research summaries from public routes.
-- `input/rules/`: official notice, rubric, page limit, template notes.
+- `input/rules/`: official notice, rubric, page limit, report form/template files.
 - `input/references/`: reference reports for structure mining.
 - `input/evidence/`: anonymized classroom evidence.
 - `input/photos/`: photos after privacy review or redaction.
@@ -20,21 +20,22 @@ Put only current competition inputs here. Do not commit raw student data.
 Fast path:
 
 ```bash
-rch go <workspace> --major 과학
+rch go <workspace> --competition-name "창의교육 연구대회" --major 과학
 ```
 
 Detailed path:
 
-1. Run `rch brainstorm <workspace>`.
-2. Run `rch research-background <workspace>`.
-3. Add rules, references, evidence, photos, and survey summaries.
-4. Run `rch bootstrap-lanes <workspace> <agent>`.
-5. Give each `lane-input.md` to the best agent or human owner.
-6. Let agents fill lane contracts.
-7. Run `rch check`.
-8. Run `rch assemble`.
-9. Run `rch check --final`.
-10. Hand the final bundle to one HWPX finalizer.
+1. Run `rch import-rules <workspace> <notice/rubric/form files...>` if contest files exist.
+2. Run `rch brainstorm <workspace>`.
+3. Run `rch research-background <workspace>`.
+4. Add references, evidence, photos, and survey summaries.
+5. Run `rch bootstrap-lanes <workspace> <agent>`.
+6. Give each `lane-input.md` to the best agent or human owner.
+7. Let agents fill lane contracts.
+8. Run `rch check`.
+9. Run `rch assemble`.
+10. Run `rch check --final`.
+11. Hand the final bundle to one HWPX finalizer.
 
 ## Final Gate
 

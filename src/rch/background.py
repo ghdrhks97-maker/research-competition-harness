@@ -98,12 +98,15 @@ def run_background_research(
 def build_queries(topic: str, workspace: Path) -> list[str]:
     ideas = _read_json(workspace / "input" / "ideas" / "brainstorm.json")
     answers = ideas.get("answers", {}) if isinstance(ideas, dict) else {}
+    competition = str(answers.get("competition_name", "")).strip()
     major = str(answers.get("major", "")).strip()
     competency = str(answers.get("competency", "")).strip()
     interests = str(answers.get("interests", "")).strip()
 
-    base = topic.strip() or "수업혁신 연구"
+    base = topic.strip() or "연구대회 보고서 연구"
     pieces = [base]
+    if competition:
+        pieces.append(competition)
     if major:
         pieces.append(f"{major} 교육")
     if competency:
@@ -114,7 +117,7 @@ def build_queries(topic: str, workspace: Path) -> list[str]:
 
     queries = [
         f"{compact} 선행연구 이론적 배경",
-        f"{compact} 수업혁신 효과 연구",
+        f"{compact} 효과 연구 보고서",
         f"{compact} classroom intervention education research",
         f"{compact} student agency formative assessment learning outcomes",
     ]
@@ -181,7 +184,7 @@ def _topic_from_workspace(workspace: Path) -> str:
     for line in brainstorm.splitlines():
         if "연구 주제:" in line:
             return line.split("연구 주제:", 1)[1].strip()
-    return "수업혁신 연구"
+    return "연구대회 보고서 연구"
 
 
 def _first_lane_output(workspace: Path, lane: str) -> str:
@@ -373,7 +376,7 @@ def _fallback_sources(topic: str) -> list[ResearchSource]:
 def _concepts_from_sources(topic: str, sources: list[ResearchSource]) -> list[dict[str, Any]]:
     concepts = [
         {
-            "name": "수업혁신의 필요성",
+            "name": "연구 필요성",
             "summary": f"{topic}을(를) 학생 변화 근거와 연결해 연구 필요성에 배치한다.",
             "source_urls": [source.url for source in sources[:2] if source.url],
         },

@@ -353,10 +353,13 @@ class CliTests(unittest.TestCase):
     def test_go_finishes_with_missing_survey_and_photos(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "competition"
+            rule_file = Path(tmp) / "2026_보고서_양식.hwpx"
+            rule_file.write_bytes(b"fake hwpx template")
             answers = Path(tmp) / "answers.json"
             answers.write_text(
                 json.dumps(
                     {
+                        "competition_name": "창의교육 연구대회",
                         "major": "과학",
                         "level": "중학교 2학년",
                         "class_context": "28명",
@@ -375,6 +378,8 @@ class CliTests(unittest.TestCase):
                     str(workspace),
                     "--answers",
                     str(answers),
+                    "--rule-file",
+                    str(rule_file),
                     "--offline-research",
                     "--survey-items",
                     "5",
@@ -385,9 +390,22 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertTrue((workspace / "output" / "report.hwpx").exists())
             self.assertTrue((workspace / "output" / "missing-inputs.md").exists())
+            self.assertTrue((workspace / "input" / "rules" / "forms" / "2026_보고서_양식.hwpx").exists())
             report = (workspace / "output" / "report-draft.md").read_text(encoding="utf-8")
             appendix = (workspace / "output" / "appendix.md").read_text(encoding="utf-8")
             self.assertIn("동일 문항 5문항 사전·사후 설문", report)
             self.assertIn("사진첨부필요", appendix)
             check = json.loads((workspace / "output" / "harness-check.json").read_text(encoding="utf-8"))
             self.assertTrue(check["ok"], check)
+
+    def test_import_rules_copies_template_to_rules_input(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            init_workspace(workspace)
+            form = Path(tmp) / "보고서_양식.hwp"
+            form.write_bytes(b"form")
+            code = main(["import-rules", str(workspace), str(form)])
+            self.assertEqual(code, 0)
+            self.assertTrue((workspace / "input" / "rules" / "forms" / "보고서_양식.hwp").exists())
+            manifest = json.loads((workspace / "input" / "rules" / "rules-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["files"][0]["kind"], "forms")

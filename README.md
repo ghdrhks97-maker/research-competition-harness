@@ -1,13 +1,15 @@
 # 연구대회 보고서 제작 하네스
 
-수업혁신사례 연구대회 보고서를 여러 AI 에이전트와 함께 만들기 위한 로컬 우선 하네스입니다.
+여러 종류의 연구대회 보고서를 AI 에이전트와 함께 만들기 위한 로컬 우선 하네스입니다.
 
-목표는 아이디어, 수업사진, 설문결과, 레퍼런스 보고서, 증빙 자료를 한 작업공간에 넣고, lane별 지침을 따라 보고서 본문·요약서·목차·부록·최종화 체크리스트까지 통제된 markdown bundle로 만드는 것입니다.
+목표는 대회 공문·보고서 양식·심사표, 아이디어, 사진, 설문결과, 레퍼런스 보고서, 증빙 자료를 한 작업공간에 넣고, lane별 지침을 따라 보고서 본문·요약서·목차·부록·최종화 체크리스트까지 통제된 markdown bundle로 만드는 것입니다.
 
 ## 현재 하네스가 하는 일
 
 - 새 연구대회 작업공간 생성
-- 아이디어, 배경연구, 공문, 레퍼런스, 증빙, 사진, 설문, raw_private 입력 폴더 생성
+- 아이디어, 배경연구, 공문·양식·심사표, 레퍼런스, 증빙, 사진, 설문, raw_private 입력 폴더 생성
+- 참가 대회명과 대회 프로필 저장
+- 에이전트 앱에 첨부한 대회 양식 파일을 `input/rules/`에 저장
 - 14개 lane별 한국어 작업 지침 생성
 - 각 lane의 산출물 계약 고정
 - claim-ledger로 허위 주장, placeholder, 증거 누락 차단
@@ -29,7 +31,8 @@
 | 명령 | 하는 일 | 산출물 |
 | --- | --- | --- |
 | `rch go <ws>` | 짧은 전체 실행. 작업공간 생성 → 브레인스토밍 → 배경연구 → 설문/사진 placeholder → 레퍼런스 구조 → 초안 → 조립 → HWPX → 렌더 점검 | `output/report.hwpx` + 보강표 |
-| `rch brainstorm <ws>` | 전공 인터뷰 → 교육 트렌드 리서치 → 연구 주제·제목 자동 생성. 사람이 ideas 파일을 직접 쓰지 않음 | `input/ideas/` + brainstorm lane |
+| `rch import-rules <ws> <files...>` | 대회 공문·심사표·보고서 양식을 `input/rules/`에 복사하고 manifest 생성 | `input/rules/rules-manifest.json` |
+| `rch brainstorm <ws>` | 대회명 → 분야/교과 인터뷰 → 연구 동향 리서치 → 연구 주제·제목 자동 생성. 사람이 ideas 파일을 직접 쓰지 않음 | `input/ideas/` + `input/rules/competition-profile.json` |
 | `rch research-background <ws>` | insane-search 방식의 public-route scheduler로 이론적 배경·선행연구 후보 수집(OpenAlex/CrossRef/arXiv/Jina route → fallback) | `input/research/` + reference-miner lane |
 | `rch import-survey <ws> <file>` | 사전·사후 설문 CSV/TSV/XLSX 익명 분석(평균·변화량·Cohen's d·t검정 p값·자유응답 요약·소표본 한계) | `input/surveys/analysis/` |
 | `rch import-photos <ws>` | 사진 매니페스트 + 개인정보 점검표(본문/요약/부록/제외 분류, 블러 지시) | `input/photos/analysis/` |
@@ -45,7 +48,7 @@
 한 번에 도는 흐름:
 
 ```bash
-rch go 2026-competition --major 과학 --interests "AI, 탐구" --competency 탐구력
+rch go 2026-competition --competition-name "창의교육 연구대회" --major 과학 --interests "AI, 탐구" --competency 탐구력
 ```
 
 설문·사진이 아직 없어도 멈추지 않습니다. 이 경우 하네스가 다음 placeholder 표를 넣고 HWPX까지 만듭니다.
@@ -59,7 +62,8 @@ rch go 2026-competition --major 과학 --interests "AI, 탐구" --competency 탐
 
 ```bash
 rch init 2026-competition
-rch brainstorm 2026-competition            # 전공 인터뷰 → 트렌드 → 주제·제목 → input/ideas/ 자동 작성
+rch import-rules 2026-competition ~/Downloads/보고서_양식.hwpx ~/Downloads/심사표.pdf
+rch brainstorm 2026-competition            # 대회명 → 분야/교과 → 주제·제목 → input/ideas/ 자동 작성
 rch research-background 2026-competition   # 이론적 배경·선행연구 후보 수집
 rch agents preflight 2026-competition
 # input/rules, input/references, input/surveys, input/photos, input/evidence 채우기 (ideas는 brainstorm이 채움)
@@ -76,42 +80,67 @@ rch revise-loop 2026-competition
 
 각 명령은 `skills/` 아래 스킬 팩(`survey-analysis-skill` 등)으로 문서화되어 있습니다.
 
-## Claude Code / Codex에서 MCP로 쓰기
+## Claude Code / Codex / AGY에서 MCP로 쓰기
 
-CLI로 직접 돌리는 대신 **Claude Code나 Codex가 하네스 기능을 도구로 호출**하게 하려면 MCP 서버를 씁니다.
+CLI로 직접 돌리는 대신 **Claude Code, Codex, AGY가 하네스 기능을 도구로 호출**하게 하려면 MCP 서버를 씁니다.
 
 ```bash
 pip install -e ".[mcp]"     # rch-mcp (stdio MCP 서버) 설치
 ```
 
-Claude Code(`.mcp.json`) 또는 Codex(`~/.codex/config.toml`)에 `rch-mcp`를 등록하면 `go`, `init`, `brainstorm`, `research_background`, `import_survey`, `draft`, `build_hwpx`, `render_check` 등이 도구로 노출됩니다. 이때는 에이전트가 운전자이므로 `rch agents ...`(하네스가 AI를 호출) 기능은 필요 없습니다. 설정과 예시는 [`docs/mcp.md`](docs/mcp.md) 참고.
+Claude Code(`.mcp.json`) 또는 Codex(`~/.codex/config.toml`)에 `rch-mcp`를 등록하면 `go`, `init`, `import_rules`, `brainstorm`, `research_background`, `import_survey`, `draft`, `build_hwpx`, `render_check` 등이 도구로 노출됩니다. 이때는 에이전트가 운전자이므로 `rch agents ...`(하네스가 AI를 호출) 기능은 필요 없습니다. 설정과 예시는 [`docs/mcp.md`](docs/mcp.md) 참고.
 
 모든 에이전트앱 공통 짧은 지시:
 
 ```text
-rch go를 사용해 2026-competition 작업공간을 만들고 과학, AI 탐구, 탐구력 중심으로 보고서 초안과 HWPX까지 생성해줘.
+rch go를 사용해 2026-competition 작업공간을 만들고 창의교육 연구대회, 과학, AI 탐구, 탐구력 중심으로 보고서 초안과 HWPX까지 생성해줘. 첨부한 보고서 양식 파일은 input/rules에 저장해서 참고해줘.
 ```
 
 ## 시작: 브레인스토밍으로 주제·제목 자동 생성
 
-하네스를 시작하면 사람이 `input/ideas/`에 파일을 직접 쓰지 않습니다. `rch brainstorm`이 인터뷰 → 트렌드 리서치 → 주제·제목까지 만들어 넣습니다.
+하네스를 시작하면 사람이 `input/ideas/`에 파일을 직접 쓰지 않습니다. `rch brainstorm`이 참가 대회명 → 분야/교과 인터뷰 → 동향 리서치 → 주제·제목까지 만들어 넣습니다.
 
 ```bash
 rch init 2026-competition
-rch brainstorm 2026-competition                 # 대화형 인터뷰
+rch brainstorm 2026-competition                 # 대화형 인터뷰. 첫 질문은 참가 연구대회명
 rch init 2026-competition --brainstorm          # init 직후 인터뷰까지 한 번에
 rch brainstorm 2026-competition --answers answers.json   # 비대화형(자동화/재현)
+rch brainstorm 2026-competition --competition-name "과학전람회"
 rch brainstorm 2026-competition --agent claude  # 트렌드 리서치를 실제 에이전트로 보강
 rch brainstorm 2026-competition --research-background  # 주제 선정 직후 배경연구까지 실행
 ```
 
-인터뷰 항목: 전공 교과(필수), 학교급/학년, 학급 상황, 관심 트렌드, 활용 도구, 목표 역량, 제약. 답변만 하면 하네스가 다음을 자동 작성합니다.
+인터뷰 항목: 참가 연구대회명, 전공/분야(필수), 학교급/학년, 상황, 관심 트렌드, 활용 도구, 목표 역량, 제약. 답변만 하면 하네스가 다음을 자동 작성합니다.
 
 - `input/ideas/00-interview.md` — 인터뷰 기록
 - `input/ideas/01-trend-research.md` — 전공 적합도로 정렬한 교육 트렌드 리서치
 - `input/ideas/02-research-topics.md` — 점수 매긴 연구 주제 후보(추천 표시)
 - `input/ideas/03-title-candidates.md` — 알파벳 약어형·한글 스토리형 제목 후보 5개
 - `input/ideas/brainstorm.json` — 기계 판독용 번들
+- `input/rules/competition-profile.json` — 참가 대회명·분야 프로필
+
+## 대회 양식·공문·심사표 넣기
+
+대회마다 양식과 규정이 다르므로, 파일을 먼저 `input/rules/`에 넣습니다.
+
+```bash
+rch import-rules 2026-competition ~/Downloads/공문.pdf ~/Downloads/보고서_양식.hwpx ~/Downloads/심사표.xlsx
+```
+
+에이전트 앱에서 첨부한 파일도 로컬 path만 알면 MCP로 저장할 수 있습니다.
+
+```text
+첨부한 공문, 심사표, 보고서 양식 파일을 rch import_rules로 input/rules에 저장하고, 그 양식을 기준으로 rch go를 실행해줘.
+```
+
+저장 위치:
+
+```text
+input/rules/forms/      보고서 양식, 서식
+input/rules/rubrics/    심사표, 평가표
+input/rules/notices/    공문, 요강, 규정
+input/rules/templates/  그 외 참고 양식
+```
 
 추천 제목은 `brainstorm` lane에도 자동 반영되어 이후 `rch draft`의 보고서 제목으로 이어집니다. 생성된 주제·제목은 `placeholder` claim으로 들어가며, 심사기준 대조와 최종 선택은 사람이 확정합니다.
 

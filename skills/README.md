@@ -4,9 +4,9 @@
 
 | 단계 | 스킬 | 명령 |
 | --- | --- | --- |
-| 빠른 시작 | rch-go | `rch go` (브레인스토밍 → 배경연구 → placeholder → 초안 → HWPX) |
+| 빠른 시작 | rch-go | `rch go` (양식 import → 브레인스토밍 → 배경연구 → placeholder → 초안 → HWPX) |
 | 0 | agent-runner-skill | `rch agents preflight` / `rch agents run` |
-| 1 | brainstorm-skill | `rch brainstorm` (전공 인터뷰 → 트렌드 → 주제·제목 → input/ideas) |
+| 1 | brainstorm-skill | `rch brainstorm` (대회명 → 분야 인터뷰 → 동향 → 주제·제목 → input/ideas) |
 | 2 | research-background-skill | `rch research-background` |
 | 3 | input-intake-skill | `rch run-lanes` (intake) |
 | 4 | survey-analysis-skill | `rch import-survey` |
@@ -23,14 +23,15 @@
 ## 한 번에 도는 흐름
 
 ```bash
-rch go 2026-competition --major 과학 --interests "AI, 탐구" --competency 탐구력
+rch go 2026-competition --competition-name "창의교육 연구대회" --major 과학 --interests "AI, 탐구" --competency 탐구력
 ```
 
 세부 단계 직접 실행:
 
 ```bash
 rch init 2026-competition
-rch brainstorm 2026-competition              # 전공 인터뷰 → 트렌드 → 주제·제목 → input/ideas 자동 작성
+rch import-rules 2026-competition ~/Downloads/보고서_양식.hwpx ~/Downloads/심사표.pdf
+rch brainstorm 2026-competition              # 대회명 → 분야 → 주제·제목 → input/ideas 자동 작성
 rch research-background 2026-competition     # 이론적 배경·선행연구 후보 수집
 rch agents preflight 2026-competition        # 에이전트 설치·로그인 확인
 # 자료 채우기: input/rules, input/references, input/surveys, input/photos, input/evidence (ideas는 brainstorm이 채움)

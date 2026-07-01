@@ -25,6 +25,7 @@ from rch import photos as photos_mod
 from rch import references as references_mod
 from rch import render_check as render_check_mod
 from rch import revise as revise_mod
+from rch import rules as rules_mod
 from rch import survey as survey_mod
 from rch.cli import assemble_workspace, check_workspace, go_workspace, init_workspace
 from rch.lane_specs import FINAL_BUNDLE_FILES
@@ -32,7 +33,16 @@ from rch.lane_specs import FINAL_BUNDLE_FILES
 # Bundle files that carry renderable report content (checklist is meta).
 _RENDER_BUNDLE = tuple(name for name in FINAL_BUNDLE_FILES if name != "finalization-checklist.md")
 
-INTERVIEW_KEYS = ("major", "level", "class_context", "interests", "tools", "competency", "constraints")
+INTERVIEW_KEYS = (
+    "competition_name",
+    "major",
+    "level",
+    "class_context",
+    "interests",
+    "tools",
+    "competency",
+    "constraints",
+)
 
 
 def _ws(workspace: str) -> Path:
@@ -61,6 +71,13 @@ def op_brainstorm(workspace: str, major: str, **answers: str) -> dict[str, Any]:
         "trends": bundle.trends,
         "ideas_dir": "input/ideas/",
     }
+
+
+def op_import_rules(workspace: str, rule_files: str) -> dict[str, Any]:
+    path = _ws(workspace)
+    files = _split_paths(rule_files)
+    report = rules_mod.import_rule_files(path, files)
+    return report.to_dict()
 
 
 def op_import_survey(workspace: str, survey_path: str) -> dict[str, Any]:
@@ -158,6 +175,7 @@ def op_revise_loop(workspace: str) -> dict[str, Any]:
 
 def op_go(
     workspace: str,
+    competition_name: str = "연구대회",
     major: str = "교과",
     level: str = "",
     class_context: str = "",
@@ -165,6 +183,7 @@ def op_go(
     tools: str = "",
     competency: str = "",
     constraints: str = "",
+    rule_files: str = "",
     survey_path: str = "",
     offline_research: bool = False,
     survey_items: int = 5,
@@ -173,6 +192,7 @@ def op_go(
 ) -> dict[str, Any]:
     path = _ws(workspace)
     answers = {
+        "competition_name": competition_name or "연구대회",
         "major": major or "교과",
         "level": level,
         "class_context": class_context,
@@ -184,12 +204,20 @@ def op_go(
     return go_workspace(
         path,
         answers={key: value for key, value in answers.items() if value},
+        rule_files=_split_paths(rule_files),
         survey_path=Path(survey_path).expanduser() if survey_path else None,
         offline_research=offline_research,
         survey_items=survey_items,
         photo_count=photo_count,
         build_hwpx=build_hwpx,
     )
+
+
+def _split_paths(value: str) -> list[Path]:
+    if not value:
+        return []
+    raw = value.replace("\n", ",").replace(";", ",").split(",")
+    return [Path(item.strip()).expanduser() for item in raw if item.strip()]
 
 
 def build_server() -> Any:
@@ -202,7 +230,7 @@ def build_server() -> Any:
         ) from exc
 
     app = FastMCP("rch", instructions=(
-        "한국 수업혁신 연구대회 보고서 제작 하네스. 빠른 시작은 go. 순서: init → brainstorm → "
+        "한국 연구대회 보고서 제작 하네스. 빠른 시작은 go. 순서: init → brainstorm → "
         "research_background/import_survey/import_photos/mine_references → draft → assemble → check(final) → "
         "build_hwpx → render_check → revise_loop. 증거 없는 수치·학생 발화·사진은 금지."
     ))
@@ -210,6 +238,7 @@ def build_server() -> Any:
     @app.tool()
     def go(
         workspace: str,
+        competition_name: str = "연구대회",
         major: str = "교과",
         level: str = "",
         class_context: str = "",
@@ -217,6 +246,7 @@ def build_server() -> Any:
         tools: str = "",
         competency: str = "",
         constraints: str = "",
+        rule_files: str = "",
         survey_path: str = "",
         offline_research: bool = False,
         survey_items: int = 5,
@@ -226,6 +256,7 @@ def build_server() -> Any:
         """브레인스토밍부터 HWPX 검증까지 자동 실행한다. 설문/사진 없으면 placeholder 표를 만든다."""
         return op_go(
             workspace,
+            competition_name=competition_name,
             major=major,
             level=level,
             class_context=class_context,
@@ -233,6 +264,7 @@ def build_server() -> Any:
             tools=tools,
             competency=competency,
             constraints=constraints,
+            rule_files=rule_files,
             survey_path=survey_path,
             offline_research=offline_research,
             survey_items=survey_items,
@@ -249,6 +281,7 @@ def build_server() -> Any:
     def brainstorm(
         workspace: str,
         major: str,
+        competition_name: str = "",
         level: str = "",
         class_context: str = "",
         interests: str = "",
@@ -258,9 +291,14 @@ def build_server() -> Any:
     ) -> dict[str, Any]:
         """전공 인터뷰 답을 받아 트렌드 리서치·연구 주제·제목을 만들어 input/ideas에 쓴다."""
         return op_brainstorm(
-            workspace, major, level=level, class_context=class_context, interests=interests,
+            workspace, major, competition_name=competition_name, level=level, class_context=class_context, interests=interests,
             tools=tools, competency=competency, constraints=constraints,
         )
+
+    @app.tool()
+    def import_rules(workspace: str, rule_files: str) -> dict[str, Any]:
+        """대회 공문·심사표·보고서 양식 파일을 input/rules에 저장한다."""
+        return op_import_rules(workspace, rule_files)
 
     @app.tool()
     def import_survey(workspace: str, survey_path: str) -> dict[str, Any]:

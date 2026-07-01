@@ -16,9 +16,22 @@ class McpOpsTests(unittest.TestCase):
 
             self.assertTrue(mcp_server.op_init(workspace)["ok"])
 
-            brain = mcp_server.op_brainstorm(workspace, "과학", interests="AI, 탐구", competency="탐구력")
+            brain = mcp_server.op_brainstorm(
+                workspace,
+                "과학",
+                competition_name="창의교육 연구대회",
+                interests="AI, 탐구",
+                competency="탐구력",
+            )
             self.assertTrue(brain["recommended_title"])
             self.assertTrue((Path(workspace) / "input" / "ideas" / "brainstorm.json").exists())
+            profile = Path(workspace) / "input" / "rules" / "competition-profile.json"
+            self.assertIn("창의교육 연구대회", profile.read_text(encoding="utf-8"))
+
+            form = Path(tmp) / "보고서_양식.hwpx"
+            form.write_bytes(b"form")
+            imported = mcp_server.op_import_rules(workspace, str(form))
+            self.assertEqual(imported["files"][0]["kind"], "forms")
 
             survey = Path(tmp) / "s.csv"
             survey.write_text("문항_사전,문항_사후\n2,4\n3,5\n2,5\n", encoding="utf-8")
@@ -65,6 +78,7 @@ class McpOpsTests(unittest.TestCase):
             workspace = str(Path(tmp) / "ws")
             result = mcp_server.op_go(
                 workspace,
+                competition_name="창의교육 연구대회",
                 major="과학",
                 interests="AI, 탐구",
                 competency="탐구력",
