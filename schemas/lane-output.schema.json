@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lane Output",
+  "type": "object",
+  "required": ["lane", "agent", "summary", "artifacts"],
+  "properties": {
+    "lane": { "type": "string" },
+    "agent": { "type": "string" },
+    "summary": { "type": "string" },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "kind"],
+        "properties": {
+          "path": { "type": "string" },
+          "kind": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  }
+}
