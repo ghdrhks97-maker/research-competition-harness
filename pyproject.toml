@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Local-first multi-agent harness for Korean research competition report production."
 requires-python = ">=3.10"
 readme = "README.md"
+license = { text = "MIT" }
 
 [project.optional-dependencies]
 xlsx = ["openpyxl>=3.0"]
