@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Claim Ledger",
+  "type": "object",
+  "required": ["claims"],
+  "properties": {
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["real", "placeholder", "derived", "forbidden"]
+          },
+          "evidence": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  }
+}
