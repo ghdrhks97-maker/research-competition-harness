@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lane Verdict",
+  "type": "object",
+  "required": ["status", "reason"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["pass", "needs-work", "blocked"]
+    },
+    "reason": { "type": "string" },
+    "blockers": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
