@@ -19,6 +19,12 @@ verdict.json
 evidence/
 ```
 
+Additional final-required file for `critic`:
+
+```text
+rubric-score.json
+```
+
 ## Status Model
 
 Lane work should be treated as one of:
@@ -51,11 +57,37 @@ No lane output merges into a final bundle unless:
 
 1. Required files exist.
 2. JSON parses.
-3. Verdict is not blocked.
+3. Verdict is `pass`.
 4. Every final claim has evidence.
-5. No final forbidden marker exists.
-6. Required assembled bundle files exist.
-7. `bundle-manifest.json` has no missing source lanes.
+5. Every final evidence path is workspace-relative and does not point at `input/raw_private/`.
+6. Every production lane has at least one complete agent output.
+7. `critic/rubric-score.json` has at least 5 criteria, evidence/risk/fix per criterion, and total score at or above 85%.
+8. No final forbidden marker exists.
+9. Required assembled bundle files exist.
+10. `bundle-manifest.json` has no missing source lanes.
+
+## Critic Rubric Score
+
+`critic` writes a scoring file:
+
+```json
+{
+  "total_score": 90,
+  "max_score": 100,
+  "items": [
+    {
+      "criterion": "학생 변화 근거",
+      "score": 18,
+      "max_score": 20,
+      "evidence": "설문·산출물 근거",
+      "risk": "수치 과장 시 감점",
+      "fix": "소표본 한계 명시"
+    }
+  ]
+}
+```
+
+`total_score` and `max_score` must equal the sum of item scores. Final target is 85% or higher.
 
 ## Final Bundle
 

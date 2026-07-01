@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Rubric Score",
+  "type": "object",
+  "required": ["total_score", "max_score", "items"],
+  "properties": {
+    "total_score": { "type": "number", "minimum": 0 },
+    "max_score": { "type": "number", "exclusiveMinimum": 0 },
+    "items": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["criterion", "score", "max_score", "evidence", "risk", "fix"],
+        "properties": {
+          "criterion": { "type": "string", "minLength": 1 },
+          "score": { "type": "number", "minimum": 0 },
+          "max_score": { "type": "number", "exclusiveMinimum": 0 },
+          "evidence": { "type": "string", "minLength": 1 },
+          "risk": { "type": "string", "minLength": 1 },
+          "fix": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

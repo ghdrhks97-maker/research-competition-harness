@@ -18,7 +18,9 @@
   - `output/appendix.md`
   - `output/finalization-checklist.md`
   - `output/bundle-manifest.json`
-- `check --final`로 final bundle 누락, missing source lane, 금지 문구를 검사
+- `check --final`로 14개 production lane 완료, final bundle 누락, missing source lane, 금지 문구를 검사
+- final evidence 경로가 workspace 내부이고 `input/raw_private/`를 직접 쓰지 않는지 검사
+- critic의 `rubric-score.json`으로 심사표 기준 점수화와 85% 이상 final target을 검사
 
 ## 생성 엔진 · 렌더 엔진 · 품질 루프
 
@@ -206,6 +208,25 @@ lanes/<lane>/<agent>/
   evidence/           # 해당 lane에서 쓴 보조 근거
 ```
 
+`critic` lane은 추가로 `rubric-score.json`을 채웁니다.
+
+```json
+{
+  "total_score": 90,
+  "max_score": 100,
+  "items": [
+    {
+      "criterion": "학생 변화 근거",
+      "score": 18,
+      "max_score": 20,
+      "evidence": "설문·산출물 근거",
+      "risk": "수치 과장 시 감점",
+      "fix": "소표본 한계 명시"
+    }
+  ]
+}
+```
+
 `claim-ledger.json` status:
 
 | Status | 뜻 | final 반영 |
@@ -255,6 +276,14 @@ output/bundle-manifest.json
 ```
 
 `bundle-manifest.json`에는 각 파일 SHA-256과 source lane이 남습니다. source lane이 비면 `check --final`에서 실패합니다.
+
+`check --final` 추가 규칙:
+
+- 모든 production lane은 최소 1개 agent output이 완성되어야 합니다.
+- 모든 required lane의 `verdict.status`는 `pass`여야 합니다.
+- final claim evidence는 workspace-relative path여야 합니다.
+- final claim evidence는 `input/raw_private/`를 직접 가리킬 수 없습니다.
+- critic `rubric-score.json`은 5개 이상 criterion과 85% 이상 총점을 가져야 합니다.
 
 ## 금지선
 

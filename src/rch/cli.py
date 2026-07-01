@@ -38,6 +38,22 @@ FINAL_FORBIDDEN = ("예정", "추후", "보완 예정", "초안", "미정", "TOD
 CLAIM_STATUSES = {"real", "placeholder", "derived", "forbidden"}
 FINAL_ALLOWED_STATUSES = {"real", "derived"}
 FINAL_REQUIRED_LANES = frozenset(lane for lanes in FINAL_OUTPUT_MAP.values() for lane in lanes)
+UPSTREAM_REQUIRED_LANES = frozenset(
+    (
+        "intake",
+        "brainstorm",
+        "reference-miner",
+        "evidence-curator",
+        "survey-analyzer",
+        "photo-curator",
+        "table-layout",
+        "icon-visual",
+    )
+)
+FINAL_GATE_REQUIRED_LANES = FINAL_REQUIRED_LANES | UPSTREAM_REQUIRED_LANES
+CRITIC_RUBRIC_FILE = "rubric-score.json"
+RUBRIC_MIN_PERCENT = 85.0
+MIN_RUBRIC_ITEMS = 5
 HEX_DIGITS = set("0123456789abcdef")
 
 
@@ -187,6 +203,7 @@ def check_workspace(workspace: Path, final: bool = False) -> CheckResult:
         warnings.append("no claim-ledger.json files found yet")
 
     if final:
+        _check_final_required_lanes(workspace, errors)
         _check_final_bundle(workspace, errors)
 
     result = CheckResult(not errors, errors, warnings)
@@ -222,6 +239,8 @@ def _check_lane(lane_dir: Path, errors: list[str], warnings: list[str], final: b
         errors.append(f"{lane_dir}: verdict.json must be object")
     elif verdict.get("status") not in {"pass", "needs-work", "blocked"}:
         errors.append(f"{lane_dir}: verdict.status must be pass, needs-work, or blocked")
+    elif final and lane_dir.parent.name in FINAL_GATE_REQUIRED_LANES and verdict.get("status") != "pass":
+        errors.append(f"{lane_dir}: final required lane verdict.status must be pass")
 
     claims = claim_ledger.get("claims") if isinstance(claim_ledger, dict) else None
     if not isinstance(claims, list):
@@ -247,8 +266,107 @@ def _check_lane(lane_dir: Path, errors: list[str], warnings: list[str], final: b
         evidence = claim.get("evidence")
         if status in FINAL_ALLOWED_STATUSES and not evidence:
             errors.append(f"{lane_dir}: claim {index} needs evidence path")
-        elif final and status in FINAL_ALLOWED_STATUSES and not _evidence_exists(lane_dir, evidence):
-            errors.append(f"{lane_dir}: claim {index} evidence path missing: {evidence}")
+        elif final and status in FINAL_ALLOWED_STATUSES:
+            evidence_error = _check_evidence_path(lane_dir, evidence)
+            if evidence_error:
+                errors.append(f"{lane_dir}: claim {index} {evidence_error}")
+
+    if final and lane_dir.parent.name == "critic":
+        _check_critic_rubric_score(lane_dir, errors)
+
+
+def _check_final_required_lanes(workspace: Path, errors: list[str]) -> None:
+    lanes_root = workspace / "lanes"
+    for lane in sorted(FINAL_GATE_REQUIRED_LANES):
+        lane_root = lanes_root / lane
+        if not lane_root.exists():
+            errors.append(f"missing final required lane: {lane}")
+            continue
+        agent_dirs = [path for path in lane_root.iterdir() if path.is_dir()]
+        if not agent_dirs:
+            errors.append(f"missing final required lane agent output: {lane}")
+            continue
+        if not any(_has_lane_contract_files(agent_dir) for agent_dir in agent_dirs):
+            errors.append(f"final required lane has no complete agent output: {lane}")
+
+
+def _has_lane_contract_files(lane_dir: Path) -> bool:
+    return all(
+        (lane_dir / name).exists()
+        for name in ("lane-output.md", "lane-output.json", "claim-ledger.json", "verdict.json")
+    )
+
+
+def _check_critic_rubric_score(lane_dir: Path, errors: list[str]) -> None:
+    path = lane_dir / CRITIC_RUBRIC_FILE
+    try:
+        rubric = _read_json(path)
+    except ValueError as exc:
+        errors.append(str(exc))
+        return
+
+    if not isinstance(rubric, dict):
+        errors.append(f"{path}: rubric-score.json must be object")
+        return
+
+    total_score = rubric.get("total_score")
+    max_score = rubric.get("max_score")
+    items = rubric.get("items")
+
+    if not _is_number(total_score):
+        errors.append(f"{path}: total_score must be number")
+    if not _is_number(max_score) or max_score <= 0:
+        errors.append(f"{path}: max_score must be positive number")
+    if _is_number(total_score) and _is_number(max_score) and max_score > 0:
+        if total_score < 0 or total_score > max_score:
+            errors.append(f"{path}: total_score must be between 0 and max_score")
+        percent = total_score / max_score * 100
+        if percent < RUBRIC_MIN_PERCENT:
+            errors.append(f"{path}: rubric total {percent:.1f}% below final target {RUBRIC_MIN_PERCENT:.1f}%")
+
+    if not isinstance(items, list) or len(items) < MIN_RUBRIC_ITEMS:
+        errors.append(f"{path}: items must contain at least {MIN_RUBRIC_ITEMS} scoring criteria")
+        return
+
+    item_score_total = 0.0
+    item_max_total = 0.0
+    item_totals_valid = True
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            errors.append(f"{path}: items[{index}] must be object")
+            item_totals_valid = False
+            continue
+        criterion = item.get("criterion")
+        score = item.get("score")
+        item_max_score = item.get("max_score")
+        evidence = item.get("evidence")
+        risk = item.get("risk")
+        fix = item.get("fix")
+        if not isinstance(criterion, str) or not criterion.strip():
+            errors.append(f"{path}: items[{index}].criterion must be non-empty string")
+        if not _is_number(score):
+            errors.append(f"{path}: items[{index}].score must be number")
+            item_totals_valid = False
+        if not _is_number(item_max_score) or item_max_score <= 0:
+            errors.append(f"{path}: items[{index}].max_score must be positive number")
+            item_totals_valid = False
+        if _is_number(score) and _is_number(item_max_score) and item_max_score > 0:
+            if score < 0 or score > item_max_score:
+                errors.append(f"{path}: items[{index}].score must be between 0 and max_score")
+                item_totals_valid = False
+            item_score_total += float(score)
+            item_max_total += float(item_max_score)
+        if not isinstance(evidence, str) or not evidence.strip():
+            errors.append(f"{path}: items[{index}].evidence must be non-empty string")
+        if not isinstance(risk, str) or not risk.strip():
+            errors.append(f"{path}: items[{index}].risk must be non-empty string")
+        if not isinstance(fix, str) or not fix.strip():
+            errors.append(f"{path}: items[{index}].fix must be non-empty string")
+
+    if item_totals_valid and _is_number(total_score) and abs(item_score_total - float(total_score)) > 0.01:
+        errors.append(f"{path}: total_score must equal sum of item scores")
+    if item_totals_valid and _is_number(max_score) and abs(item_max_total - float(max_score)) > 0.01:
+        errors.append(f"{path}: max_score must equal sum of item max_score values")
 
 
 def _check_final_bundle(workspace: Path, errors: list[str]) -> None:
@@ -384,14 +502,52 @@ def _check_manifest_source_files(
             errors.append(f"final bundle source file sha256 mismatch: {path}")
 
 
-def _evidence_exists(lane_dir: Path, evidence: Any) -> bool:
+def _check_evidence_path(lane_dir: Path, evidence: Any) -> str | None:
     if not isinstance(evidence, str) or not evidence.strip():
-        return False
+        return "needs evidence path"
     evidence_path = Path(evidence)
     if evidence_path.is_absolute():
-        return evidence_path.exists()
+        return f"evidence path must be workspace-relative: {evidence}"
+    if any(part == ".." for part in evidence_path.parts):
+        return f"evidence path must stay inside workspace: {evidence}"
+    if (
+        len(evidence_path.parts) >= 2
+        and evidence_path.parts[0] == "input"
+        and evidence_path.parts[1] == "raw_private"
+    ):
+        return f"evidence path cannot use input/raw_private: {evidence}"
     workspace = lane_dir.parents[2]
-    return (lane_dir / evidence_path).exists() or (workspace / evidence_path).exists()
+    for candidate in (lane_dir / evidence_path, workspace / evidence_path):
+        resolved = candidate.resolve(strict=False)
+        if not _is_relative_to(resolved, workspace.resolve()):
+            return f"evidence path must stay inside workspace: {evidence}"
+        if _is_raw_private_path(resolved, workspace.resolve()):
+            return f"evidence path cannot use input/raw_private: {evidence}"
+        if resolved.exists():
+            if not resolved.is_file():
+                return f"evidence path must point to file: {evidence}"
+            return None
+    return f"evidence path missing: {evidence}"
+
+
+def _is_raw_private_path(path: Path, workspace: Path) -> bool:
+    try:
+        relative = path.relative_to(workspace)
+    except ValueError:
+        return False
+    return len(relative.parts) >= 2 and relative.parts[0] == "input" and relative.parts[1] == "raw_private"
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def import_survey_cmd(workspace: Path, survey_path: Path) -> None:

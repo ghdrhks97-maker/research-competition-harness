@@ -11,7 +11,7 @@ It currently:
 - gives each agent a fixed file contract,
 - checks claim ledgers and final forbidden markers,
 - assembles lane outputs into report/summary/toc/appendix/checklist markdown bundle,
-- blocks final bundle completion when required bundle files or source lanes are missing.
+- blocks final bundle completion when required bundle files, source lanes, upstream production lanes, internal evidence paths, or critic rubric scoring are missing.
 
 It now also ships a generation engine, a render engine, and a quality loop:
 
@@ -94,8 +94,9 @@ PYTHONPATH=src python3 -m rch.cli revise-loop <workspace>
 3. Evidence and claim-ledger gate.
 4. Survey/photo provenance gate.
 5. Draft/table/summary consistency gate.
-6. Bundle assembly gate.
-7. HWPX/Hancom render gate, performed outside this CLI until direct HWPX integration exists.
+6. Critic rubric-score gate: at least 5 criteria, evidence/risk/fix per criterion, 85% minimum final target.
+7. Bundle assembly gate.
+8. HWPX/Hancom render gate, performed outside this CLI until direct HWPX integration exists.
 
 ## Hard Safety Rules
 
@@ -104,3 +105,4 @@ PYTHONPATH=src python3 -m rch.cli revise-loop <workspace>
 - No final body wording such as `(예정)`, `추후`, `보완 예정`, `초안`, `미정`, `TODO`.
 - No concurrent HWPX editing.
 - Raw student data, unredacted photos, and private survey files stay outside commits.
+- Final evidence paths must stay workspace-relative and cannot point at `input/raw_private/`.

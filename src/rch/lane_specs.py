@@ -311,8 +311,10 @@ LANE_SPECS: "OrderedDict[str, LaneSpec]" = OrderedDict(
                     "review table",
                     "blocking issues",
                     "machine feedback json",
+                    "rubric-score.json",
                     "claim-ledger.json",
                 ],
+                "required_files": ["rubric-score.json"],
                 "guardrails": [
                     "좋아 보인다는 평보다 고칠 수 있는 지시를 쓴다.",
                     "사실 확인이 필요한 항목을 임의로 확정하지 않는다.",
@@ -383,6 +385,7 @@ def render_lane_input(lane: str, agent: str) -> str:
             "- `lane-output.json`",
             "- `claim-ledger.json`",
             "- `verdict.json`",
+            *[f"- `{item}`" for item in spec.get("required_files", [])],
             "- `evidence/`",
             "",
             "## lane-output.md에 포함할 내용",

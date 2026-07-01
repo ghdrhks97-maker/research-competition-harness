@@ -25,6 +25,10 @@ Put only current competition inputs here. Do not commit raw student data.
 7. Run `rch check --final`.
 8. Hand the final bundle to one HWPX finalizer.
 
+## Final Gate
+
+`rch check --final` now requires all production lanes to have complete agent output. Final evidence paths must be workspace-relative and must not point at `input/raw_private/`. The `critic` lane must also write `rubric-score.json` with at least 5 scored criteria and 85% or higher total score.
+
 ## Current Boundary
 
 This template does not run external AI tools by itself. It prepares safe work lanes and final bundle structure.

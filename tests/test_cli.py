@@ -11,14 +11,17 @@ from rch.lane_specs import LANE_SPECS
 
 class CliTests(unittest.TestCase):
     def _write_final_ready_lanes(self, workspace: Path) -> dict[str, str]:
-        samples = {
+        samples = {lane: f"{spec['title']} 샘플" for lane, spec in LANE_SPECS.items()}
+        samples.update(
+            {
             "draft-writer": "보고서 본문 샘플",
             "summary-sheet": "요약서 샘플",
             "toc-builder": "목차 샘플",
             "appendix-builder": "부록 샘플",
             "critic": "비평 점검 샘플",
             "finalizer": "최종 점검 샘플",
-        }
+            }
+        )
         for lane, content in samples.items():
             lane_dir = workspace / "lanes" / lane / "codex"
             (lane_dir / "evidence").mkdir(exist_ok=True)
@@ -37,7 +40,74 @@ class CliTests(unittest.TestCase):
             (lane_dir / "verdict.json").write_text(
                 json.dumps({"status": "pass", "reason": "synthetic"}), encoding="utf-8"
             )
+            if lane == "critic":
+                self._write_passing_rubric_score(lane_dir)
         return samples
+
+    def _write_passing_rubric_score(self, lane_dir: Path) -> None:
+        items = [
+            {
+                "criterion": "연구 필요성",
+                "score": 18,
+                "max_score": 20,
+                "evidence": "심사표와 본문 필요성 대응",
+                "risk": "근거 연결 약화 시 감점",
+                "fix": "필요성과 수업 증거 연결 유지",
+            },
+            {
+                "criterion": "수업 설계",
+                "score": 18,
+                "max_score": 20,
+                "evidence": "수업 모형과 실천과제 대응",
+                "risk": "단계 설명 부족 시 감점",
+                "fix": "표 중심으로 단계 보강",
+            },
+            {
+                "criterion": "실행 충실도",
+                "score": 18,
+                "max_score": 20,
+                "evidence": "차시 운영 증빙",
+                "risk": "증빙 누락 시 감점",
+                "fix": "활동지와 사진 근거 유지",
+            },
+            {
+                "criterion": "학생 변화 근거",
+                "score": 18,
+                "max_score": 20,
+                "evidence": "설문과 산출물 근거",
+                "risk": "수치 과장 시 감점",
+                "fix": "소표본 한계 명시",
+            },
+            {
+                "criterion": "일반화 가능성",
+                "score": 18,
+                "max_score": 20,
+                "evidence": "확산 계획과 적용 조건",
+                "risk": "미확정 실적 표현 시 감점",
+                "fix": "확정 사실만 유지",
+            },
+        ]
+        (lane_dir / "rubric-score.json").write_text(
+            json.dumps({"total_score": 90, "max_score": 100, "items": items}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def _write_low_rubric_score(self, lane_dir: Path) -> None:
+        items = [
+            {
+                "criterion": criterion,
+                "score": 14,
+                "max_score": 20,
+                "evidence": "근거 부족",
+                "risk": "감점 위험",
+                "fix": "보강 필요",
+            }
+            for criterion in ("연구 필요성", "수업 설계", "실행 충실도", "학생 변화 근거", "일반화 가능성")
+        ]
+        (lane_dir / "rubric-score.json").write_text(
+            json.dumps({"total_score": 70, "max_score": 100, "items": items}, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
     def test_init_and_lane_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -122,6 +192,95 @@ class CliTests(unittest.TestCase):
 
             result = check_workspace(workspace, final=True)
             self.assertTrue(result.ok, result.errors)
+
+    def test_final_check_requires_upstream_lane_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            init_workspace(workspace)
+            bootstrap_lanes(workspace, "codex")
+            self._write_final_ready_lanes(workspace)
+            (workspace / "lanes" / "survey-analyzer" / "codex" / "lane-output.md").unlink()
+            assemble_workspace(workspace)
+
+            result = check_workspace(workspace, final=True)
+            self.assertFalse(result.ok)
+            self.assertTrue(any("survey-analyzer" in err for err in result.errors), result.errors)
+
+    def test_final_check_rejects_non_pass_required_lane_verdict(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            init_workspace(workspace)
+            bootstrap_lanes(workspace, "codex")
+            self._write_final_ready_lanes(workspace)
+            verdict_path = workspace / "lanes" / "survey-analyzer" / "codex" / "verdict.json"
+            verdict_path.write_text(json.dumps({"status": "needs-work", "reason": "review pending"}), encoding="utf-8")
+            assemble_workspace(workspace)
+
+            result = check_workspace(workspace, final=True)
+            self.assertFalse(result.ok)
+            self.assertTrue(any("verdict.status must be pass" in err for err in result.errors), result.errors)
+
+    def test_final_check_rejects_absolute_evidence_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            init_workspace(workspace)
+            bootstrap_lanes(workspace, "codex")
+            self._write_final_ready_lanes(workspace)
+            claim_path = workspace / "lanes" / "draft-writer" / "codex" / "claim-ledger.json"
+            claim_ledger = json.loads(claim_path.read_text(encoding="utf-8"))
+            claim_ledger["claims"][0]["evidence"] = str(
+                workspace / "lanes" / "draft-writer" / "codex" / "evidence" / "source.md"
+            )
+            claim_path.write_text(json.dumps(claim_ledger, ensure_ascii=False), encoding="utf-8")
+            assemble_workspace(workspace)
+
+            result = check_workspace(workspace, final=True)
+            self.assertFalse(result.ok)
+            self.assertTrue(any("workspace-relative" in err for err in result.errors), result.errors)
+
+    def test_final_check_rejects_raw_private_evidence_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            init_workspace(workspace)
+            bootstrap_lanes(workspace, "codex")
+            self._write_final_ready_lanes(workspace)
+            raw_private = workspace / "input" / "raw_private" / "secret.md"
+            raw_private.write_text("raw student data", encoding="utf-8")
+            claim_path = workspace / "lanes" / "draft-writer" / "codex" / "claim-ledger.json"
+            claim_ledger = json.loads(claim_path.read_text(encoding="utf-8"))
+            claim_ledger["claims"][0]["evidence"] = "input/raw_private/secret.md"
+            claim_path.write_text(json.dumps(claim_ledger, ensure_ascii=False), encoding="utf-8")
+            assemble_workspace(workspace)
+
+            result = check_workspace(workspace, final=True)
+            self.assertFalse(result.ok)
+            self.assertTrue(any("input/raw_private" in err for err in result.errors), result.errors)
+
+    def test_final_check_requires_critic_rubric_score(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            init_workspace(workspace)
+            bootstrap_lanes(workspace, "codex")
+            self._write_final_ready_lanes(workspace)
+            (workspace / "lanes" / "critic" / "codex" / "rubric-score.json").unlink()
+            assemble_workspace(workspace)
+
+            result = check_workspace(workspace, final=True)
+            self.assertFalse(result.ok)
+            self.assertTrue(any("rubric-score.json" in err for err in result.errors), result.errors)
+
+    def test_final_check_rejects_low_critic_rubric_score(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            init_workspace(workspace)
+            bootstrap_lanes(workspace, "codex")
+            self._write_final_ready_lanes(workspace)
+            self._write_low_rubric_score(workspace / "lanes" / "critic" / "codex")
+            assemble_workspace(workspace)
+
+            result = check_workspace(workspace, final=True)
+            self.assertFalse(result.ok)
+            self.assertTrue(any("below final target" in err for err in result.errors), result.errors)
 
     def test_final_check_rejects_stale_bundle_manifest_sha(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
