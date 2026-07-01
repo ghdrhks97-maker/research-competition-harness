@@ -58,6 +58,16 @@ rch revise-loop 2026-competition
 
 각 명령은 `skills/` 아래 스킬 팩(`survey-analysis-skill` 등)으로 문서화되어 있습니다.
 
+## Claude Code / Codex에서 MCP로 쓰기
+
+CLI로 직접 돌리는 대신 **Claude Code나 Codex가 하네스 기능을 도구로 호출**하게 하려면 MCP 서버를 씁니다.
+
+```bash
+pip install -e ".[mcp]"     # rch-mcp (stdio MCP 서버) 설치
+```
+
+Claude Code(`.mcp.json`) 또는 Codex(`~/.codex/config.toml`)에 `rch-mcp`를 등록하면 `init`, `brainstorm`, `import_survey`, `draft`, `build_hwpx`, `render_check` 등이 도구로 노출됩니다. 이때는 에이전트가 운전자이므로 `rch agents ...`(하네스가 AI를 호출) 기능은 필요 없습니다. 설정과 예시는 [`docs/mcp.md`](docs/mcp.md) 참고.
+
 ## 시작: 브레인스토밍으로 주제·제목 자동 생성
 
 하네스를 시작하면 사람이 `input/ideas/`에 파일을 직접 쓰지 않습니다. `rch brainstorm`이 인터뷰 → 트렌드 리서치 → 주제·제목까지 만들어 넣습니다.

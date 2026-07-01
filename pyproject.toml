@@ -7,9 +7,11 @@ readme = "README.md"
 
 [project.optional-dependencies]
 xlsx = ["openpyxl>=3.0"]
+mcp = ["mcp>=1.2"]
 
 [project.scripts]
 rch = "rch.cli:main"
+rch-mcp = "rch.mcp_server:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
