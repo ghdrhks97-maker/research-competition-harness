@@ -5,24 +5,26 @@
 | 단계 | 스킬 | 명령 |
 | --- | --- | --- |
 | 0 | agent-runner-skill | `rch agents preflight` / `rch agents run` |
-| 1 | input-intake-skill | `rch run-lanes` (intake) |
-| 2 | survey-analysis-skill | `rch import-survey` |
-| 3 | photo-privacy-curator-skill | `rch import-photos` |
-| 4 | reference-report-miner-skill | `rch mine-references` |
-| 5 | evidence-ledger-skill | `rch check` |
-| 6 | report-draft-writer-skill | `rch draft` |
-| 7 | summary-toc-appendix-skill | `rch draft` + `rch assemble` |
-| 8 | table-layout-compressor-skill | `rch render-check` 신호 |
-| 9 | hwp/hwpx-finalizer-skill | `rch build-hwpx` |
-| 10 | hancom-render-qa-skill | `rch render-check` |
+| 1 | brainstorm-skill | `rch brainstorm` (전공 인터뷰 → 트렌드 → 주제·제목 → input/ideas) |
+| 2 | input-intake-skill | `rch run-lanes` (intake) |
+| 3 | survey-analysis-skill | `rch import-survey` |
+| 4 | photo-privacy-curator-skill | `rch import-photos` |
+| 5 | reference-report-miner-skill | `rch mine-references` |
+| 6 | evidence-ledger-skill | `rch check` |
+| 7 | report-draft-writer-skill | `rch draft` |
+| 8 | summary-toc-appendix-skill | `rch draft` + `rch assemble` |
+| 9 | table-layout-compressor-skill | `rch render-check` 신호 |
+| 10 | hwp/hwpx-finalizer-skill | `rch build-hwpx` |
+| 11 | hancom-render-qa-skill | `rch render-check` |
 | 루프 | (품질 루프) | `rch revise-loop` |
 
 ## 한 번에 도는 흐름
 
 ```bash
 rch init 2026-competition
+rch brainstorm 2026-competition              # 전공 인터뷰 → 트렌드 → 주제·제목 → input/ideas 자동 작성
 rch agents preflight 2026-competition        # 에이전트 설치·로그인 확인
-# 자료 채우기: input/rules, input/references, input/ideas, input/surveys, input/photos, input/evidence
+# 자료 채우기: input/rules, input/references, input/surveys, input/photos, input/evidence (ideas는 brainstorm이 채움)
 rch import-survey 2026-competition input/surveys/pre-post.csv
 rch import-photos 2026-competition
 rch mine-references 2026-competition

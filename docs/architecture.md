@@ -15,6 +15,7 @@ It currently:
 
 It now also ships a generation engine, a render engine, and a quality loop:
 
+- `brainstorm`: the starting step. Runs a subject interview, ranks current education trends by subject fit, synthesizes scored research-topic candidates, brainstorms report titles, and writes them into `input/ideas/` (seeding the `brainstorm` lane) so no one hand-authors idea files. Interactive on stdin, or scripted via `--answers`, or agent-augmented via `--agent`.
 - `import-survey`: anonymized pre/post survey analysis (means, deltas, Cohen's d, two-sided t-test p-value, free-response summary, small-sample caveats) with pure-stdlib statistics.
 - `import-photos`: photo manifest + privacy checklist (safe-by-default `unreviewed`, blur instructions, body/summary/appendix/exclude placement).
 - `mine-references`: structure-only extraction (outline, table density, appendix pattern) from `.md`/`.txt`/`.hwpx` references.
@@ -44,6 +45,7 @@ Main commands:
 
 ```bash
 PYTHONPATH=src python3 -m rch.cli init <workspace>
+PYTHONPATH=src python3 -m rch.cli brainstorm <workspace>
 PYTHONPATH=src python3 -m rch.cli agents preflight <workspace>
 PYTHONPATH=src python3 -m rch.cli bootstrap-lanes <workspace> <agent>
 PYTHONPATH=src python3 -m rch.cli import-survey <workspace> <file>

@@ -26,6 +26,7 @@
 
 | 명령 | 하는 일 | 산출물 |
 | --- | --- | --- |
+| `rch brainstorm <ws>` | 전공 인터뷰 → 교육 트렌드 리서치 → 연구 주제·제목 자동 생성. 사람이 ideas 파일을 직접 쓰지 않음 | `input/ideas/` + brainstorm lane |
 | `rch import-survey <ws> <file>` | 사전·사후 설문 CSV/TSV/XLSX 익명 분석(평균·변화량·Cohen's d·t검정 p값·자유응답 요약·소표본 한계) | `input/surveys/analysis/` |
 | `rch import-photos <ws>` | 사진 매니페스트 + 개인정보 점검표(본문/요약/부록/제외 분류, 블러 지시) | `input/photos/analysis/` |
 | `rch mine-references <ws>` | 레퍼런스 보고서에서 목차·표 밀도·부록 패턴 등 **구조만** 추출 | `input/references/analysis/` |
@@ -41,7 +42,9 @@
 
 ```bash
 rch init 2026-competition
-# input/rules, input/references, input/ideas, input/surveys, input/photos, input/evidence 채우기
+rch brainstorm 2026-competition            # 전공 인터뷰 → 트렌드 → 주제·제목 → input/ideas/ 자동 작성
+rch agents preflight 2026-competition
+# input/rules, input/references, input/surveys, input/photos, input/evidence 채우기 (ideas는 brainstorm이 채움)
 rch import-survey 2026-competition input/surveys/pre-post.csv
 rch import-photos 2026-competition
 rch mine-references 2026-competition
@@ -54,6 +57,34 @@ rch revise-loop 2026-competition
 ```
 
 각 명령은 `skills/` 아래 스킬 팩(`survey-analysis-skill` 등)으로 문서화되어 있습니다.
+
+## 시작: 브레인스토밍으로 주제·제목 자동 생성
+
+하네스를 시작하면 사람이 `input/ideas/`에 파일을 직접 쓰지 않습니다. `rch brainstorm`이 인터뷰 → 트렌드 리서치 → 주제·제목까지 만들어 넣습니다.
+
+```bash
+rch init 2026-competition
+rch brainstorm 2026-competition                 # 대화형 인터뷰
+rch init 2026-competition --brainstorm          # init 직후 인터뷰까지 한 번에
+rch brainstorm 2026-competition --answers answers.json   # 비대화형(자동화/재현)
+rch brainstorm 2026-competition --agent gemini  # 트렌드 리서치를 실제 에이전트로 보강
+```
+
+인터뷰 항목: 전공 교과(필수), 학교급/학년, 학급 상황, 관심 트렌드, 활용 도구, 목표 역량, 제약. 답변만 하면 하네스가 다음을 자동 작성합니다.
+
+- `input/ideas/00-interview.md` — 인터뷰 기록
+- `input/ideas/01-trend-research.md` — 전공 적합도로 정렬한 교육 트렌드 리서치
+- `input/ideas/02-research-topics.md` — 점수 매긴 연구 주제 후보(추천 표시)
+- `input/ideas/03-title-candidates.md` — 알파벳 약어형·한글 스토리형 제목 후보 5개
+- `input/ideas/brainstorm.json` — 기계 판독용 번들
+
+추천 제목은 `brainstorm` lane에도 자동 반영되어 이후 `rch draft`의 보고서 제목으로 이어집니다. 생성된 주제·제목은 `placeholder` claim으로 들어가며, 심사기준 대조와 최종 선택은 사람이 확정합니다.
+
+비대화형 답변 파일 예시(`answers.json`):
+
+```json
+{"major":"과학","level":"중학교 2학년","class_context":"28명","interests":"AI, 탐구","tools":"AI 챗봇, 태블릿","competency":"탐구력","constraints":"총 12차시"}
+```
 
 ## 에이전트 자동 호출 · 로그인 확인
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from rch import agents as agents_mod
+from rch import brainstorm as brainstorm_mod
 from rch import draft as draft_mod
 from rch import hwpx as hwpx_mod
 from rch import photos as photos_mod
@@ -66,6 +67,7 @@ def init_workspace(target: Path) -> None:
     shutil.copytree(TEMPLATE, target, dirs_exist_ok=True)
     _ensure_input_dirs(target)
     print(f"initialized {target}")
+    print("다음 단계: `rch brainstorm <workspace>` 로 전공 인터뷰 → 트렌드 리서치 → 주제·제목을 자동 생성해 input/ideas/에 채웁니다.")
 
 
 def create_lane(workspace: Path, lane: str, agent: str) -> None:
@@ -477,6 +479,27 @@ def revise_loop_cmd(workspace: Path) -> None:
     print(json.dumps(backlog.to_dict(), ensure_ascii=False, indent=2))
 
 
+def brainstorm_cmd(workspace: Path, answers_path: Path | None, agent: str | None) -> None:
+    answers: dict[str, str] | None = None
+    if answers_path is not None:
+        loaded = json.loads(answers_path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise SystemExit("--answers 파일은 JSON 객체여야 합니다.")
+        answers = {str(key): str(value) for key, value in loaded.items()}
+    bundle = brainstorm_mod.run_brainstorm(workspace, answers=answers, agent=agent)
+    summary = {
+        "major": bundle.answers.get("major", ""),
+        "recommended_topic": bundle.recommended_topic,
+        "recommended_title": bundle.titles[0] if bundle.titles else "",
+        "topic_count": len(bundle.topics),
+        "agent_augmented": bundle.agent_augmented,
+        "ideas_written": [f"input/ideas/{name}" for name in (
+            "00-interview.md", "01-trend-research.md", "02-research-topics.md", "03-title-candidates.md", "brainstorm.json"
+        )],
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
 def agents_list_cmd() -> None:
     registry = {
         name: {
@@ -514,6 +537,12 @@ def main(argv: list[str] | None = None) -> int:
 
     init_p = sub.add_parser("init", help="create a clean competition workspace")
     init_p.add_argument("workspace")
+    init_p.add_argument("--brainstorm", action="store_true", help="run the brainstorm interview right after init")
+
+    brainstorm_p = sub.add_parser("brainstorm", help="interview → trend research → topic/title → input/ideas/")
+    brainstorm_p.add_argument("workspace")
+    brainstorm_p.add_argument("--answers", help="JSON file of interview answers (non-interactive)")
+    brainstorm_p.add_argument("--agent", choices=tuple(agents_mod.AGENT_REGISTRY), help="augment trend research via an agent CLI")
 
     lane_p = sub.add_parser("lane", help="create lane inbox for an agent")
     lane_p.add_argument("workspace")
@@ -585,6 +614,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "init":
         init_workspace(Path(args.workspace))
+        if args.brainstorm:
+            brainstorm_cmd(Path(args.workspace), None, None)
+        return 0
+    if args.cmd == "brainstorm":
+        brainstorm_cmd(
+            Path(args.workspace),
+            Path(args.answers) if args.answers else None,
+            args.agent,
+        )
         return 0
     if args.cmd == "lane":
         create_lane(Path(args.workspace), args.lane, args.agent)
