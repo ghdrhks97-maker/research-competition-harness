@@ -1,79 +1,68 @@
-# AGENTS.md — 연구대회 보고서 하네스 오케스트레이션 지침
+# AGENTS.md — 에이전트 우선 연구보고서 하네스
 
-이 파일은 **모든 에이전트 앱(Codex, Claude Code, Antigravity, Gemini 등)** 공용 지침이다. 이 저장소가 설치된 작업공간에서 "연구보고서 만들어줘" 같은 요청을 받으면 아래 절차를 따른다.
+이 저장소는 **에이전트 우선(agent-first)** 하네스다. 판단·분석·집필은 전부 에이전트가 하고, 파이썬(`rch`)은 LLM이 오히려 부정확한 **세 가지에만** 쓴다.
 
-Claude Code는 `.claude/skills/report-orchestrator/`와 `.claude/agents/`를 자동 인식한다. Codex/Antigravity/Gemini는 이 `AGENTS.md`를 진입점으로 삼는다.
+이 파일은 모든 에이전트 앱(Claude Code, Antigravity, Codex, Gemini) 공용 진입점이다. 작업공간에서 "연구보고서 만들어줘" 요청을 받으면 아래를 따른다.
 
-## 이 저장소는 무엇인가
+## 파이썬은 딱 3가지만 (그 외 전부 에이전트)
 
-여러 종류의 연구대회 보고서를 만드는 하이브리드 하네스다.
+| 파이썬(`rch`)이 하는 일 | 이유 |
+| --- | --- |
+| `rch import-survey` — 설문 통계(평균·효과크기·t검정 p값) | LLM은 산술에서 틀린다. 파이썬이 정확. |
+| `rch build-hwpx` — HWPX(OWPML zip) 생성 | LLM은 유효한 바이너리 문서를 못 만든다. |
+| `rch assemble` / `check --final` / `render-check` — 조립·검증 게이트 | 결정적 규칙 검사. |
 
-- **`rch` (파이썬 CLI)** = 결정적 작업만. 설문 통계, HWPX 렌더, 검증, 개인정보 스캔, 골격 생성. **숫자를 만들지 않는다.**
-- **에이전트 (당신, LLM)** = 실제 글쓰기·종합·비평. 각 lane의 산출물을 **진짜 내용**으로 채운다. **숫자를 지어내지 않는다**(설문 수치는 rch 분석 결과만 인용).
+부수적으로 `rch init`(폴더 골격), `rch import-rules`(양식 파일 복사)만 더 쓴다.
 
-순수 파이썬은 placeholder 골격만 만든다. 실제 보고서 문장은 반드시 에이전트가 쓴다.
+**그 외 — 레퍼런스 구조 분석, insane 리서치(배경·선행연구), 브레인스토밍, 사진 개인정보, 본문 집필, 표 편집, 요약·목차·부록, 비평, 최종화 — 는 전부 에이전트가 한다.** 과거 파이썬 명령(`rch brainstorm/mine-references/research-background/draft/import-photos`)은 정확도가 낮아 **더 이상 콘텐츠 생성에 쓰지 않는다**(에이전트가 대체).
 
-## 준비
+## 런타임 적응: 실행하는 앱이 자기 서브에이전트로 돌린다
 
-`rch`가 설치돼 있어야 한다(`pip install -e .`). 명령은 `rch ...` 또는 `PYTHONPATH=src python3 -m rch.cli ...`.
-MCP로 붙었다면 같은 기능이 `init/brainstorm/import_survey/draft/build_hwpx/render_check` 등 도구로 노출된다(`docs/mcp.md`).
+- **Claude Code** — `.claude/agents/`의 서브에이전트를 Task로 스폰한다. 독립 lane은 한 번에 여러 Task로 **병렬** 실행.
+- **Antigravity (AGY)** — AGY의 에이전트 매니저로 서브에이전트를 켠다. 각 역할 브리핑은 `.claude/agents/<역할>.md`.
+- **Codex** — Codex의 병렬 태스크로 역할을 분배한다. 병렬이 없으면 아래 의존성 순서대로 순차 수행.
 
-## 6단계 파이프라인
+어느 앱이든 역할 정의는 `.claude/agents/<역할>.md` 하나를 공유한다.
 
-### Phase 0 — 인터뷰·대회 세팅
-사용자에게 대화로 물어본다(파일 요구 금지): 참가 대회명, 전공 교과, 학교급/학년, 학급 상황, 관심 트렌드, 활용 도구, 목표 역량, 제약.
-- 대회 양식·공문·심사표 파일 경로가 있으면 `rch import-rules <ws> <files...>`.
-- 답을 플래그로 바로 전달: `rch brainstorm <ws> --competition-name "..." --major ... --interests ... --competency ...` → `input/ideas/`에 주제·제목 생성(2022 개정 핵심역량 연계).
+## 파이프라인 (의존성 = 병렬 그룹)
 
-### Phase 1 — 자료 분석 (결정적, rch)
-- 설문: `rch import-survey <ws> <file>` · 사진: `rch import-photos <ws>` · 레퍼런스: `rch mine-references <ws>` · 배경: `rch research-background <ws>`.
-- 자료가 없으면 지어내지 말고 placeholder로 두고, 무엇을 넣으면 품질이 오르는지 사용자에게 안내.
+### Phase 0 — 인터뷰·주제 (에이전트)
+대화로 물어본다(파일 요구 금지): 참가 대회명, 전공 교과, 학교급/학년, 학급 상황, 관심 트렌드, 활용 도구, 목표 역량, 제약. 양식 파일 경로 있으면 `rch import-rules`.
+→ **`brainstorm` 에이전트**가 주제·제목·수업모형·실천과제를 확정(2022 개정 6대 핵심역량 중 하나 이상 반드시 연계). `input/ideas/`에 기록.
 
-### Phase 2 — 실제 집필 (에이전트 역할 수행)
-`rch lane <ws> <lane> agent`로 lane 폴더를 만들고, 각 lane 역할을 수행해 `lanes/<lane>/agent/`에 계약 파일 4종(`lane-output.md`, `lane-output.json`, `claim-ledger.json`, `verdict.json`)을 **진짜 내용**으로 작성한다.
-- 서브에이전트 스폰이 되는 앱(Claude Code)은 `.claude/agents/`의 전문 에이전트에 위임한다.
-- 서브에이전트가 없는 앱(Codex/Antigravity)은 아래 역할을 **순서대로 직접 수행**한다.
-- 의존성: `survey-analyst`·`evidence-curator`·`reference-miner`(병렬 가능) → `draft-writer` → `table-layout` → `summary-sheet`/`toc-builder`/`appendix-builder`.
+### Phase 1 — 분석·리서치 (병렬)
+아래는 서로 독립이라 **동시에** 돌린다:
+- **`reference-miner`** — 우수 보고서 원본을 직접 읽고 목차·표·부록 구조 설계.
+- **`background-researcher`** — insane 리서치로 이론적 배경·선행연구 조사(공개 학술·웹, 인용 날조 금지).
+- **`photo-curator`** — 사진 개인정보 실제 검토·분류.
+- **`evidence-curator`** — 주장↔증거 연결, claim 상태.
+- 설문: 오케스트레이터가 먼저 **`rch import-survey <ws> <csv>`**(파이썬 통계) 실행 → **`survey-analyst`** 에이전트가 그 수치를 해석·서술(숫자 안 만듦).
 
-### Phase 3 — 비평·검증 루프
-1. `critic` 역할로 심사자 관점 검토 → `lanes/critic/agent/machine-feedback.json` 작성.
-2. `rch check <ws>` → `rch revise-loop <ws>`로 수정 백로그 통합.
-3. 지적사항을 해당 lane에서 고치고 `rch check <ws> --final`이 통과할 때까지 반복(최대 3~4회).
+### Phase 2 — 본문 집필 (에이전트)
+**`draft-writer`** 가 Phase 1 산출물을 모두 읽고 I~V장 본문을 집필(표 중심·최종 진술형). 설문 수치는 `input/surveys/analysis/`에서만 인용.
 
-### Phase 4 — 조립·렌더
-`rch assemble <ws>` → `rch check <ws> --final`(통과 필수) → `rch build-hwpx <ws>` → `rch render-check <ws>`.
-완료 시 `output/report.hwpx`와 남은 확인사항을 제시하고, "한컴오피스에서 열어 최종 확인"을 안내한다.
+### Phase 3 — 편집·부속 (draft 이후, 일부 병렬)
+**`table-layout`** → 그 뒤 **`summary-sheet`**·**`toc-builder`**·**`appendix-builder`**(병렬).
 
-## 에이전트(lane) 역할
+### Phase 4 — 비평·검증 루프
+**`critic`** 가 심사자 관점 검토 → `lanes/critic/agent/machine-feedback.json`. 이어서 `rch check <ws>` → `rch revise-loop <ws>`. 지적사항을 해당 에이전트에 다시 위임해 고친다. `rch check <ws> --final` 통과까지 반복(최대 3~4회).
 
-각 역할의 상세 지침은 `.claude/agents/<이름>.md`에 있다. 서브에이전트가 없는 앱은 그 파일을 읽고 해당 역할을 직접 수행한다.
+### Phase 5 — 조립·렌더
+**`finalizer`** 지휘로 `rch assemble` → `rch check --final`(통과 필수) → `rch build-hwpx` → `rch render-check`. 완료 시 `output/report.hwpx`와 남은 확인사항 제시, "한컴에서 최종 확인" 안내.
 
-| 역할 | 하는 일 | 산출 위치 |
-| --- | --- | --- |
-| `brainstorm` | 주제·제목·수업모형·실천과제 프레임 확정(2022 핵심역량 연계) | `lanes/brainstorm/agent/` |
-| `reference-miner` | 레퍼런스 구조(목차·표·부록 패턴)만 추출·적용 | `lanes/reference-miner/agent/` |
-| `survey-analyst` | rch 설문 분석 수치를 해석·서술(숫자 안 만듦) | `lanes/survey-analyzer/agent/` |
-| `evidence-curator` | 주장↔증거 연결, claim 상태 확정 | `lanes/evidence-curator/agent/` |
-| `draft-writer` | I~V장 본문 집필(표 중심·최종 진술형) | `lanes/draft-writer/agent/` |
-| `table-layout` | 표·카드 중심 재편, 25쪽 압축 | `lanes/table-layout/agent/` |
-| `summary-sheet` | 요약서 작성 | `lanes/summary-sheet/agent/` |
-| `toc-builder` | 목차·페이지·제목 일관성 | `lanes/toc-builder/agent/` |
-| `appendix-builder` | 과정안·루브릭·활동지·설문지·산출물 부록 | `lanes/appendix-builder/agent/` |
-| `critic` | 심사자 관점 비평 → machine-feedback.json | `lanes/critic/agent/` |
-| `finalizer` | 정합화·HWPX 조립·렌더 검증 지휘 | `lanes/finalizer/agent/` |
+## 에이전트 역할 (13)
 
-## 안전 규칙 (모든 역할 공통·강제)
+`brainstorm`, `reference-miner`, `background-researcher`, `photo-curator`, `survey-analyst`, `evidence-curator`, `draft-writer`, `table-layout`, `summary-sheet`, `toc-builder`, `appendix-builder`, `critic`, `finalizer`. 각 에이전트는 `lanes/<lane>/agent/`에 계약 파일 4종(`lane-output.md`, `lane-output.json`, `claim-ledger.json`, `verdict.json`)을 **진짜 내용**으로 채운다.
 
-- 증거 없는 설문 수치·학생 발화·수업 결과·확산 실적을 만들지 않는다. 불확실하면 `placeholder` claim.
-- 설문 수치는 `input/surveys/analysis/`의 rch 분석 결과에서만 인용한다.
+## 안전 규칙 (전 역할 강제)
+
+- 증거 없는 설문 수치·학생 발화·수업 결과·확산 실적·인용을 **지어내지 않는다.** 불확실하면 `placeholder`.
+- 설문 수치는 `rch import-survey`가 낸 `input/surveys/analysis/` 값만 인용.
 - `unreviewed`/`high` 위험 사진은 본문·부록에 넣지 않는다.
-- 레퍼런스 문장·표 내용을 복사하지 않는다(구조만 참고).
+- 레퍼런스·웹 문장을 복사하지 않는다(구조·근거 후보만).
 - 최종 본문에 예정/추후/초안/미정/TODO 금지.
-- 여러 에이전트가 같은 HWPX를 동시에 수정하지 않는다.
-- 구조 통과(render-check)와 Hancom 실제 표시를 혼동하지 않는다 — 마지막은 사람이 한컴에서 확인.
+- HWPX 조립은 finalizer 한 번만. 구조 통과(render-check) ≠ Hancom 실제 표시(사람이 한컴에서 확인).
 
-## 사용량 참고
+## 사용량
 
-- LLM 작업(집필·추론)은 **당신을 구동하는 런타임의 사용량**을 쓴다(Codex→Codex, Antigravity→Antigravity, Claude Code→Claude).
-- `rch`의 결정적 명령(통계·렌더·검증)과 `research-background`(공개 API)는 **AI 사용량을 쓰지 않는다.**
-- `rch agents run` / `run-lanes --execute`만이 **다른** 에이전트 CLI를 불러내 그쪽 사용량을 쓴다. 교차 호출을 원치 않으면 이 명령을 쓰지 않는다.
+LLM 작업은 **구동 런타임 사용량**만 쓴다(AGY→AGY, Codex→Codex, Claude Code→Claude). `rch`의 통계·렌더·검증은 AI 사용량 0. `rch agents run`/`run-lanes --execute`만 다른 CLI를 교차 호출한다(에이전트 우선 모드에서는 쓰지 않는다).
