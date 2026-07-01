@@ -17,6 +17,7 @@ pip install -e ".[mcp]"     # mcp 패키지 포함 설치
 
 | 도구 | 하는 일 |
 | --- | --- |
+| `go(workspace, major?, ...)` | 브레인스토밍부터 HWPX 렌더 점검까지 자동 실행. 설문/사진 없으면 placeholder 표 생성 |
 | `init(workspace)` | 작업공간 생성 |
 | `brainstorm(workspace, major, level?, class_context?, interests?, tools?, competency?, constraints?)` | 인터뷰 답 → 트렌드·주제·제목 → input/ideas |
 | `research_background(workspace, query?, max_results?, offline?)` | 공개 route scheduler로 이론적 배경·선행연구 후보 수집 |
@@ -82,9 +83,17 @@ command = "rch-mcp"
 
 ## 사용 예 (에이전트 대화)
 
+짧은 전체 실행:
+
+> "rch MCP의 `go`를 사용해 `2026-대회` 작업공간을 만들어줘. 전공은 과학, 관심은 AI·탐구, 목표 역량은 탐구력. 설문이나 사진이 없으면 필요한 항목 표를 넣고 HWPX까지 만들어줘."
+
+자료가 있는 경우 세부 실행:
+
 > "`2026-대회` 작업공간 만들고, 전공은 과학, 관심은 AI·탐구로 브레인스토밍해줘. 배경지식과 선행연구도 리서치하고, 그다음 `~/survey.csv` 설문 분석하고 초안까지 만들어줘."
 
 에이전트가 순서대로 `init → brainstorm → research_background → import_survey → draft → assemble → check`를 도구로 호출합니다.
+
+`go`는 내부에서 `init → brainstorm → research_background → import_survey 또는 설문 placeholder → import_photos 또는 사진 placeholder → mine_references → draft → assemble → check → build_hwpx → render_check → revise_loop`를 실행합니다.
 
 ## 참고
 

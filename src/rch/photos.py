@@ -25,6 +25,14 @@ LOW_RISK_HINTS = ("결과물", "산출물", "화면", "칠판", "board", "artifa
 RISK_UNREVIEWED = "unreviewed"
 RISK_HIGH = "high"
 RISK_LOW = "low"
+RISK_MISSING = "missing"
+DEFAULT_REQUIRED_PHOTOS = 4
+PHOTO_PLACEHOLDER_LABELS = (
+    ("도입 활동", "body"),
+    ("모둠 탐구 장면", "body"),
+    ("학생 산출물", "appendix"),
+    ("정리·발표 장면", "appendix"),
+)
 
 
 @dataclass
@@ -44,6 +52,8 @@ class PhotoManifest:
     source_dir: str
     count: int
     photos: list[PhotoEntry] = field(default_factory=list)
+    missing_required: bool = False
+    required_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -59,6 +69,8 @@ def _classify(name: str) -> tuple[str, str]:
 
 
 def _placement(risk: str) -> str:
+    if risk == RISK_MISSING:
+        return "appendix"
     if risk == RISK_LOW:
         return "body"
     if risk == RISK_HIGH:
@@ -67,6 +79,12 @@ def _placement(risk: str) -> str:
 
 
 def _checklist(risk: str) -> list[str]:
+    if risk == RISK_MISSING:
+        return [
+            "수업 장면 사진 첨부",
+            "얼굴·이름·학번 블러 처리",
+            "본문/부록 배치 확정",
+        ]
     base = [
         "얼굴 식별 가능 여부 확인",
         "이름표·명찰·학번 노출 확인",
@@ -78,9 +96,38 @@ def _checklist(risk: str) -> list[str]:
     return base
 
 
-def build_manifest(source_dir: Path) -> PhotoManifest:
+def _missing_photo_entries(required_count: int) -> list[PhotoEntry]:
+    entries: list[PhotoEntry] = []
+    labels = list(PHOTO_PLACEHOLDER_LABELS)
+    while len(labels) < required_count:
+        labels.append((f"추가 수업사진 {len(labels) + 1}", "appendix"))
+    for index, (label, placement) in enumerate(labels[:required_count], 1):
+        entries.append(
+            PhotoEntry(
+                file=f"사진첨부필요_{index:02d}_{label}",
+                sha256="",
+                bytes=0,
+                privacy_risk=RISK_MISSING,
+                blur_required=True,
+                suggested_placement=placement,
+                checklist=_checklist(RISK_MISSING),
+                notes=f"{label} 사진 첨부 필요",
+            )
+        )
+    return entries
+
+
+def build_manifest(
+    source_dir: Path,
+    placeholder_if_empty: bool = True,
+    required_count: int = DEFAULT_REQUIRED_PHOTOS,
+) -> PhotoManifest:
     manifest = PhotoManifest(source_dir=source_dir.as_posix(), count=0)
     if not source_dir.exists():
+        if placeholder_if_empty:
+            manifest.photos = _missing_photo_entries(required_count)
+            manifest.missing_required = True
+            manifest.required_count = required_count
         return manifest
     for path in sorted(source_dir.rglob("*")):
         if not path.is_file() or path.suffix.lower() not in IMAGE_SUFFIXES:
@@ -100,15 +147,26 @@ def build_manifest(source_dir: Path) -> PhotoManifest:
             )
         )
     manifest.count = len(manifest.photos)
+    if manifest.count == 0 and placeholder_if_empty:
+        manifest.photos = _missing_photo_entries(required_count)
+        manifest.missing_required = True
+        manifest.required_count = required_count
     return manifest
 
 
 def render_checklist_markdown(manifest: PhotoManifest) -> str:
+    count_line = f"- 사진 수: {manifest.count}"
+    if manifest.missing_required:
+        count_line = "- 사진 수: 0"
     lines = [
         "# 사진 개인정보 점검표",
         "",
         f"- 원본 폴더: `{manifest.source_dir}`",
-        f"- 사진 수: {manifest.count}",
+        count_line,
+    ]
+    if manifest.missing_required:
+        lines.append(f"- 첨부 필요: {manifest.required_count}장")
+    lines += [
         "",
         "기본값은 안전 우선입니다. 검토 전 사진은 `unreviewed`이며 최종 반영이 차단됩니다.",
         "",
@@ -146,16 +204,73 @@ def build_claim_ledger(manifest: PhotoManifest) -> dict[str, Any]:
     return {"claims": claims}
 
 
-def import_photos(source_dir: Path, output_dir: Path) -> PhotoManifest:
-    manifest = build_manifest(source_dir)
+def _write_photo_lane(
+    workspace: Path,
+    markdown_text: str,
+    claim_ledger: dict[str, Any],
+    status: str,
+    reason: str,
+    agent: str = "harness-photo",
+) -> None:
+    lane_dir = workspace / "lanes" / "photo-curator" / agent
+    lane_dir.mkdir(parents=True, exist_ok=True)
+    (lane_dir / "evidence").mkdir(exist_ok=True)
+    (lane_dir / "lane-output.md").write_text(markdown_text, encoding="utf-8")
+    (lane_dir / "lane-output.json").write_text(
+        json.dumps(
+            {
+                "lane": "photo-curator",
+                "agent": agent,
+                "summary": reason,
+                "artifacts": [
+                    "input/photos/analysis/photo-manifest.json",
+                    "input/photos/analysis/privacy-checklist.md",
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (lane_dir / "claim-ledger.json").write_text(
+        json.dumps(claim_ledger, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    (lane_dir / "verdict.json").write_text(
+        json.dumps({"status": status, "reason": reason}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def import_photos(
+    source_dir: Path,
+    output_dir: Path,
+    workspace: Path | None = None,
+    placeholder_if_empty: bool = True,
+    required_count: int = DEFAULT_REQUIRED_PHOTOS,
+) -> PhotoManifest:
+    manifest = build_manifest(
+        source_dir,
+        placeholder_if_empty=placeholder_if_empty,
+        required_count=required_count,
+    )
+    checklist = render_checklist_markdown(manifest)
+    ledger = build_claim_ledger(manifest)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "photo-manifest.json").write_text(
         json.dumps(manifest.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    (output_dir / "privacy-checklist.md").write_text(
-        render_checklist_markdown(manifest), encoding="utf-8"
-    )
+    (output_dir / "privacy-checklist.md").write_text(checklist, encoding="utf-8")
     (output_dir / "claim-ledger.json").write_text(
-        json.dumps(build_claim_ledger(manifest), ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    if workspace is not None:
+        if manifest.missing_required:
+            status = "needs-work"
+            reason = "사진 파일 없음. 수업사진 첨부 필요."
+            agent = "harness-missing"
+        else:
+            status = "needs-work" if any(photo.privacy_risk != RISK_LOW for photo in manifest.photos) else "pass"
+            reason = "사진 개인정보 검토 필요." if status == "needs-work" else "사진 매니페스트 완료."
+            agent = "harness-photo"
+        _write_photo_lane(workspace, checklist, ledger, status=status, reason=reason, agent=agent)
     return manifest

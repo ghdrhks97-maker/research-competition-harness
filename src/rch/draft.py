@@ -231,11 +231,17 @@ def build_toc(context: DraftContext) -> tuple[str, list[dict[str, Any]]]:
 def build_appendix(context: DraftContext) -> tuple[str, list[dict[str, Any]]]:
     lines = ["# 부록", "", "본문을 보강하는 자료만 남긴다.", ""]
     claims: list[dict[str, Any]] = []
-    if context.photo_appendix:
-        lines.append("## 수업사진 (부록 배치 후보)")
+    photo_rows = [("본문", entry) for entry in context.photo_body] + [
+        ("부록", entry) for entry in context.photo_appendix
+    ]
+    if photo_rows:
+        lines.append("## 수업사진 배치표")
         lines.append("")
-        for entry in context.photo_appendix:
-            lines.append(f"- {entry}")
+        lines.append("| 배치 | 사진/필요 항목 | 상태 |")
+        lines.append("| --- | --- | --- |")
+        for placement, entry in photo_rows:
+            status = "첨부 필요" if "missing" in entry or "사진첨부필요" in entry else "개인정보 확인 필요"
+            lines.append(f"| {placement} | {entry} | {status} |")
         lines.append("")
         claims.append(_placeholder("appendix-photos", "사진 개인정보 확인 후 반영"))
     lines.append("## 구성 항목")

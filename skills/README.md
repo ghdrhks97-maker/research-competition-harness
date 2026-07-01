@@ -4,6 +4,7 @@
 
 | 단계 | 스킬 | 명령 |
 | --- | --- | --- |
+| 빠른 시작 | rch-go | `rch go` (브레인스토밍 → 배경연구 → placeholder → 초안 → HWPX) |
 | 0 | agent-runner-skill | `rch agents preflight` / `rch agents run` |
 | 1 | brainstorm-skill | `rch brainstorm` (전공 인터뷰 → 트렌드 → 주제·제목 → input/ideas) |
 | 2 | research-background-skill | `rch research-background` |
@@ -20,6 +21,12 @@
 | 루프 | (품질 루프) | `rch revise-loop` |
 
 ## 한 번에 도는 흐름
+
+```bash
+rch go 2026-competition --major 과학 --interests "AI, 탐구" --competency 탐구력
+```
+
+세부 단계 직접 실행:
 
 ```bash
 rch init 2026-competition

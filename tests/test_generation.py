@@ -17,7 +17,7 @@ from rch.references import mine_references
 from rch.render_check import render_check
 from rch.revise import run_revise_loop
 from rch.run_lanes import run_lanes
-from rch.survey import analyze_table, import_survey
+from rch.survey import analyze_table, import_survey, write_missing_survey_placeholder
 
 
 class StatsTests(unittest.TestCase):
@@ -71,6 +71,23 @@ class SurveyTests(unittest.TestCase):
             self.assertEqual(ledger["claims"][0]["status"], "derived")
             self.assertEqual(analysis.respondents, 3)
 
+    def test_missing_survey_placeholder_writes_required_table(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            init_workspace(workspace)
+            write_missing_survey_placeholder(workspace, item_count=5)
+            summary = (workspace / "input" / "surveys" / "analysis" / "survey-summary.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("동일 문항 5문항 사전·사후 설문", summary)
+            self.assertIn("| 문항 5 | 사전 응답 필요 | 사후 응답 필요 |", summary)
+            verdict = json.loads(
+                (workspace / "lanes" / "survey-analyzer" / "harness-missing" / "verdict.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(verdict["status"], "needs-work")
+
 
 class PhotoTests(unittest.TestCase):
     def test_import_photos_flags_risk(self) -> None:
@@ -84,6 +101,24 @@ class PhotoTests(unittest.TestCase):
             self.assertEqual(risks["학생_얼굴.png"], "high")
             self.assertEqual(risks["결과물_화면.png"], "low")
             self.assertTrue((source / "analysis" / "privacy-checklist.md").exists())
+
+    def test_empty_photos_write_attachment_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            init_workspace(workspace)
+            manifest = import_photos(
+                workspace / "input" / "photos",
+                workspace / "input" / "photos" / "analysis",
+                workspace=workspace,
+                required_count=3,
+            )
+            self.assertTrue(manifest.missing_required)
+            self.assertEqual(manifest.required_count, 3)
+            checklist = (workspace / "input" / "photos" / "analysis" / "privacy-checklist.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("첨부 필요: 3장", checklist)
+            self.assertIn("사진첨부필요_01", checklist)
 
 
 class ReferenceTests(unittest.TestCase):

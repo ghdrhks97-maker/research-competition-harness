@@ -28,6 +28,7 @@
 
 | 명령 | 하는 일 | 산출물 |
 | --- | --- | --- |
+| `rch go <ws>` | 짧은 전체 실행. 작업공간 생성 → 브레인스토밍 → 배경연구 → 설문/사진 placeholder → 레퍼런스 구조 → 초안 → 조립 → HWPX → 렌더 점검 | `output/report.hwpx` + 보강표 |
 | `rch brainstorm <ws>` | 전공 인터뷰 → 교육 트렌드 리서치 → 연구 주제·제목 자동 생성. 사람이 ideas 파일을 직접 쓰지 않음 | `input/ideas/` + brainstorm lane |
 | `rch research-background <ws>` | insane-search 방식의 public-route scheduler로 이론적 배경·선행연구 후보 수집(OpenAlex/CrossRef/arXiv/Jina route → fallback) | `input/research/` + reference-miner lane |
 | `rch import-survey <ws> <file>` | 사전·사후 설문 CSV/TSV/XLSX 익명 분석(평균·변화량·Cohen's d·t검정 p값·자유응답 요약·소표본 한계) | `input/surveys/analysis/` |
@@ -42,6 +43,19 @@
 | `rch revise-loop <ws>` | critic·check·render-check 피드백을 우선순위 수정 백로그로 통합 | `output/revision-tasks.{json,md}` |
 
 한 번에 도는 흐름:
+
+```bash
+rch go 2026-competition --major 과학 --interests "AI, 탐구" --competency 탐구력
+```
+
+설문·사진이 아직 없어도 멈추지 않습니다. 이 경우 하네스가 다음 placeholder 표를 넣고 HWPX까지 만듭니다.
+
+- 설문 없음: `동일 문항 5문항 사전·사후 설문 필요` 표를 `input/surveys/analysis/survey-summary.md`와 본문 결과 섹션에 삽입
+- 사진 없음: `사진첨부필요_01...` 배치표를 `input/photos/analysis/privacy-checklist.md`와 부록에 삽입
+- 보강 목록: `output/missing-inputs.md`
+- 최종 안전장치: placeholder claim과 `needs-work` verdict가 남아 `rch check --final` 통과는 막음
+
+세부 단계 직접 실행:
 
 ```bash
 rch init 2026-competition
@@ -70,7 +84,13 @@ CLI로 직접 돌리는 대신 **Claude Code나 Codex가 하네스 기능을 도
 pip install -e ".[mcp]"     # rch-mcp (stdio MCP 서버) 설치
 ```
 
-Claude Code(`.mcp.json`) 또는 Codex(`~/.codex/config.toml`)에 `rch-mcp`를 등록하면 `init`, `brainstorm`, `research_background`, `import_survey`, `draft`, `build_hwpx`, `render_check` 등이 도구로 노출됩니다. 이때는 에이전트가 운전자이므로 `rch agents ...`(하네스가 AI를 호출) 기능은 필요 없습니다. 설정과 예시는 [`docs/mcp.md`](docs/mcp.md) 참고.
+Claude Code(`.mcp.json`) 또는 Codex(`~/.codex/config.toml`)에 `rch-mcp`를 등록하면 `go`, `init`, `brainstorm`, `research_background`, `import_survey`, `draft`, `build_hwpx`, `render_check` 등이 도구로 노출됩니다. 이때는 에이전트가 운전자이므로 `rch agents ...`(하네스가 AI를 호출) 기능은 필요 없습니다. 설정과 예시는 [`docs/mcp.md`](docs/mcp.md) 참고.
+
+모든 에이전트앱 공통 짧은 지시:
+
+```text
+rch go를 사용해 2026-competition 작업공간을 만들고 과학, AI 탐구, 탐구력 중심으로 보고서 초안과 HWPX까지 생성해줘.
+```
 
 ## 시작: 브레인스토밍으로 주제·제목 자동 생성
 

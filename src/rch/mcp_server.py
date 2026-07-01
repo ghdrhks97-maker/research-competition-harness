@@ -26,7 +26,7 @@ from rch import references as references_mod
 from rch import render_check as render_check_mod
 from rch import revise as revise_mod
 from rch import survey as survey_mod
-from rch.cli import assemble_workspace, check_workspace, init_workspace
+from rch.cli import assemble_workspace, check_workspace, go_workspace, init_workspace
 from rch.lane_specs import FINAL_BUNDLE_FILES
 
 # Bundle files that carry renderable report content (checklist is meta).
@@ -65,14 +65,18 @@ def op_brainstorm(workspace: str, major: str, **answers: str) -> dict[str, Any]:
 
 def op_import_survey(workspace: str, survey_path: str) -> dict[str, Any]:
     path = _ws(workspace)
-    analysis = survey_mod.import_survey(Path(survey_path).expanduser(), path / "input" / "surveys" / "analysis")
+    analysis = survey_mod.import_survey(
+        Path(survey_path).expanduser(),
+        path / "input" / "surveys" / "analysis",
+        workspace=path,
+    )
     return analysis.to_dict()
 
 
 def op_import_photos(workspace: str) -> dict[str, Any]:
     path = _ws(workspace)
     source = path / "input" / "photos"
-    manifest = photos_mod.import_photos(source, source / "analysis")
+    manifest = photos_mod.import_photos(source, source / "analysis", workspace=path)
     return manifest.to_dict()
 
 
@@ -152,6 +156,42 @@ def op_revise_loop(workspace: str) -> dict[str, Any]:
     return backlog.to_dict()
 
 
+def op_go(
+    workspace: str,
+    major: str = "교과",
+    level: str = "",
+    class_context: str = "",
+    interests: str = "",
+    tools: str = "",
+    competency: str = "",
+    constraints: str = "",
+    survey_path: str = "",
+    offline_research: bool = False,
+    survey_items: int = 5,
+    photo_count: int = 4,
+    build_hwpx: bool = True,
+) -> dict[str, Any]:
+    path = _ws(workspace)
+    answers = {
+        "major": major or "교과",
+        "level": level,
+        "class_context": class_context,
+        "interests": interests,
+        "tools": tools,
+        "competency": competency,
+        "constraints": constraints,
+    }
+    return go_workspace(
+        path,
+        answers={key: value for key, value in answers.items() if value},
+        survey_path=Path(survey_path).expanduser() if survey_path else None,
+        offline_research=offline_research,
+        survey_items=survey_items,
+        photo_count=photo_count,
+        build_hwpx=build_hwpx,
+    )
+
+
 def build_server() -> Any:
     """Create the FastMCP server with all tools registered."""
     try:
@@ -162,10 +202,43 @@ def build_server() -> Any:
         ) from exc
 
     app = FastMCP("rch", instructions=(
-        "한국 수업혁신 연구대회 보고서 제작 하네스. 순서: init → brainstorm → "
+        "한국 수업혁신 연구대회 보고서 제작 하네스. 빠른 시작은 go. 순서: init → brainstorm → "
         "research_background/import_survey/import_photos/mine_references → draft → assemble → check(final) → "
         "build_hwpx → render_check → revise_loop. 증거 없는 수치·학생 발화·사진은 금지."
     ))
+
+    @app.tool()
+    def go(
+        workspace: str,
+        major: str = "교과",
+        level: str = "",
+        class_context: str = "",
+        interests: str = "",
+        tools: str = "",
+        competency: str = "",
+        constraints: str = "",
+        survey_path: str = "",
+        offline_research: bool = False,
+        survey_items: int = 5,
+        photo_count: int = 4,
+        build_hwpx: bool = True,
+    ) -> dict[str, Any]:
+        """브레인스토밍부터 HWPX 검증까지 자동 실행한다. 설문/사진 없으면 placeholder 표를 만든다."""
+        return op_go(
+            workspace,
+            major=major,
+            level=level,
+            class_context=class_context,
+            interests=interests,
+            tools=tools,
+            competency=competency,
+            constraints=constraints,
+            survey_path=survey_path,
+            offline_research=offline_research,
+            survey_items=survey_items,
+            photo_count=photo_count,
+            build_hwpx=build_hwpx,
+        )
 
     @app.tool()
     def init(workspace: str) -> dict[str, Any]:

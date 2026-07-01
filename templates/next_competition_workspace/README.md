@@ -17,6 +17,14 @@ Put only current competition inputs here. Do not commit raw student data.
 
 ## Flow
 
+Fast path:
+
+```bash
+rch go <workspace> --major 과학
+```
+
+Detailed path:
+
 1. Run `rch brainstorm <workspace>`.
 2. Run `rch research-background <workspace>`.
 3. Add rules, references, evidence, photos, and survey summaries.

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rch.cli import assemble_workspace, bootstrap_lanes, check_workspace, create_lane, init_workspace
+from rch.cli import assemble_workspace, bootstrap_lanes, check_workspace, create_lane, init_workspace, main
 from rch.lane_specs import LANE_SPECS
 
 
@@ -349,3 +349,45 @@ class CliTests(unittest.TestCase):
             result = check_workspace(workspace, final=True)
             self.assertFalse(result.ok)
             self.assertTrue(any("missing final bundle file" in err for err in result.errors))
+
+    def test_go_finishes_with_missing_survey_and_photos(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            answers = Path(tmp) / "answers.json"
+            answers.write_text(
+                json.dumps(
+                    {
+                        "major": "과학",
+                        "level": "중학교 2학년",
+                        "class_context": "28명",
+                        "interests": "AI, 탐구",
+                        "tools": "AI 챗봇",
+                        "competency": "탐구력",
+                        "constraints": "총 12차시",
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            code = main(
+                [
+                    "go",
+                    str(workspace),
+                    "--answers",
+                    str(answers),
+                    "--offline-research",
+                    "--survey-items",
+                    "5",
+                    "--photo-count",
+                    "4",
+                ]
+            )
+            self.assertEqual(code, 0)
+            self.assertTrue((workspace / "output" / "report.hwpx").exists())
+            self.assertTrue((workspace / "output" / "missing-inputs.md").exists())
+            report = (workspace / "output" / "report-draft.md").read_text(encoding="utf-8")
+            appendix = (workspace / "output" / "appendix.md").read_text(encoding="utf-8")
+            self.assertIn("동일 문항 5문항 사전·사후 설문", report)
+            self.assertIn("사진첨부필요", appendix)
+            check = json.loads((workspace / "output" / "harness-check.json").read_text(encoding="utf-8"))
+            self.assertTrue(check["ok"], check)

@@ -50,6 +50,8 @@ STOPWORDS = {
 }
 
 SMALL_SAMPLE_THRESHOLD = 30
+DEFAULT_REQUIRED_SURVEY_ITEMS = 5
+MISSING_SURVEY_SOURCE = "missing-survey-placeholder"
 
 
 @dataclass
@@ -421,17 +423,169 @@ def build_claim_ledger(analysis: SurveyAnalysis) -> dict[str, Any]:
     return {"claims": claims}
 
 
-def import_survey(input_path: Path, output_dir: Path) -> SurveyAnalysis:
+def _write_survey_lane(
+    workspace: Path,
+    markdown_text: str,
+    claim_ledger: dict[str, Any],
+    status: str,
+    reason: str,
+    agent: str = "harness-survey",
+) -> None:
+    lane_dir = workspace / "lanes" / "survey-analyzer" / agent
+    lane_dir.mkdir(parents=True, exist_ok=True)
+    (lane_dir / "evidence").mkdir(exist_ok=True)
+    lane_claims = _workspace_claim_paths(claim_ledger, "input/surveys/analysis/survey-analysis.json")
+    (lane_dir / "lane-output.md").write_text(markdown_text, encoding="utf-8")
+    (lane_dir / "lane-output.json").write_text(
+        json.dumps(
+            {
+                "lane": "survey-analyzer",
+                "agent": agent,
+                "summary": reason,
+                "artifacts": [
+                    "input/surveys/analysis/survey-analysis.json",
+                    "input/surveys/analysis/survey-summary.md",
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (lane_dir / "claim-ledger.json").write_text(
+        json.dumps(lane_claims, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    (lane_dir / "verdict.json").write_text(
+        json.dumps({"status": status, "reason": reason}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _workspace_claim_paths(claim_ledger: dict[str, Any], workspace_evidence: str) -> dict[str, Any]:
+    claims: list[dict[str, Any]] = []
+    for claim in claim_ledger.get("claims", []):
+        if not isinstance(claim, dict):
+            continue
+        copied = dict(claim)
+        if copied.get("status") in {"real", "derived"} and copied.get("evidence") == "analysis/survey-analysis.json":
+            copied["evidence"] = workspace_evidence
+        claims.append(copied)
+    return {"claims": claims}
+
+
+def render_missing_survey_markdown(item_count: int = DEFAULT_REQUIRED_SURVEY_ITEMS) -> str:
+    lines = [
+        "# 설문 분석 요약",
+        "",
+        "- 상태: 설문 원자료 없음",
+        f"- 필요 자료: 동일 문항 {item_count}문항 사전·사후 설문",
+        "- 권장 척도: 5점 Likert 또는 4점 Likert",
+        "- 개인정보: 이름·학번·연락처 열 제외",
+        "",
+        "## 필요한 설문 표",
+        "",
+        "| 문항 | 사전 자료 | 사후 자료 | 보고서 반영 위치 |",
+        "| --- | --- | --- | --- |",
+    ]
+    for index in range(1, item_count + 1):
+        lines.append(
+            f"| 문항 {index} | 사전 응답 필요 | 사후 응답 필요 | IV장 결과 분석 표 |"
+        )
+    lines += [
+        "",
+        "## 자유응답 필요",
+        "",
+        "| 질문 | 자료 상태 | 반영 방식 |",
+        "| --- | --- | --- |",
+        "| 수업에서 도움이 된 점 | 응답 필요 | 익명화 후 키워드 요약 |",
+        "| 더 배우고 싶은 점 | 응답 필요 | 익명화 후 개선점 요약 |",
+        "",
+        "## 분석 한계",
+        "",
+        "- 설문 파일이 없어 수치·효과크기·p값을 계산하지 않았다.",
+        "- 최종 반영 전 익명 설문 CSV/XLSX를 넣고 `rch import-survey`를 다시 실행한다.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def build_missing_survey_claim_ledger(item_count: int = DEFAULT_REQUIRED_SURVEY_ITEMS) -> dict[str, Any]:
+    return {
+        "claims": [
+            {
+                "id": "survey-missing-pre-post",
+                "text": f"동일 문항 {item_count}문항 사전·사후 설문 필요",
+                "status": "placeholder",
+                "notes": "설문 파일 없음. 수치 주장 금지.",
+            },
+            {
+                "id": "survey-missing-free-response",
+                "text": "자유응답 익명 자료 필요",
+                "status": "placeholder",
+                "notes": "학생 발화 직접 인용 전 동의·익명화 확인.",
+            },
+        ]
+    }
+
+
+def write_missing_survey_placeholder(
+    workspace: Path,
+    item_count: int = DEFAULT_REQUIRED_SURVEY_ITEMS,
+    agent: str = "harness-missing",
+) -> dict[str, Any]:
+    output_dir = workspace / "input" / "surveys" / "analysis"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    analysis = {
+        "source": MISSING_SURVEY_SOURCE,
+        "respondents": 0,
+        "placeholder": True,
+        "required_item_count": item_count,
+        "required_columns": [
+            column
+            for index in range(1, item_count + 1)
+            for column in (f"문항{index}_사전", f"문항{index}_사후")
+        ],
+        "limitations": ["설문 원자료 없음. 최종 보고서 수치 주장 불가."],
+    }
+    summary = render_missing_survey_markdown(item_count)
+    ledger = build_missing_survey_claim_ledger(item_count)
+    (output_dir / "survey-analysis.json").write_text(
+        json.dumps(analysis, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    (output_dir / "survey-summary.md").write_text(summary, encoding="utf-8")
+    (output_dir / "claim-ledger.json").write_text(
+        json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    _write_survey_lane(
+        workspace,
+        summary,
+        ledger,
+        status="needs-work",
+        reason="설문 원자료 없음. 사전·사후 설문 필요.",
+        agent=agent,
+    )
+    return analysis
+
+
+def import_survey(input_path: Path, output_dir: Path, workspace: Path | None = None) -> SurveyAnalysis:
     headers, rows = _read_table(input_path)
     analysis = analyze_table(headers, rows, source=input_path.name)
+    summary = render_summary_markdown(analysis)
+    ledger = build_claim_ledger(analysis)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "survey-analysis.json").write_text(
         json.dumps(analysis.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    (output_dir / "survey-summary.md").write_text(
-        render_summary_markdown(analysis), encoding="utf-8"
-    )
+    (output_dir / "survey-summary.md").write_text(summary, encoding="utf-8")
     (output_dir / "claim-ledger.json").write_text(
-        json.dumps(build_claim_ledger(analysis), ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    if workspace is not None:
+        _write_survey_lane(
+            workspace,
+            summary,
+            ledger,
+            status="pass",
+            reason="설문 분석 완료.",
+        )
     return analysis

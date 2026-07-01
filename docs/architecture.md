@@ -15,6 +15,7 @@ It currently:
 
 It now also ships a generation engine, a render engine, and a quality loop:
 
+- `go`: short autopilot command/tool. Runs init, brainstorm, background research, missing-input placeholders, survey/photo/reference processing, draft, assemble, HWPX build, render check, and revise loop. Missing survey/photos produce placeholder tables, not fake evidence.
 - `brainstorm`: the starting step. Runs a subject interview, ranks current education trends by subject fit, synthesizes scored research-topic candidates, brainstorms report titles, and writes them into `input/ideas/` (seeding the `brainstorm` lane) so no one hand-authors idea files. Interactive on stdin, or scripted via `--answers`, or agent-augmented via `--agent`.
 - `research-background`: insane-search inspired public-route scheduler for theory/prior-research collection. It tries public academic APIs first, then public reader/search routes, records route logs, stops at auth/paywall boundaries, and writes report-safe summaries into `input/research/`.
 - `import-survey`: anonymized pre/post survey analysis (means, deltas, Cohen's d, two-sided t-test p-value, free-response summary, small-sample caveats) with pure-stdlib statistics.
@@ -57,6 +58,7 @@ Main commands:
 
 ```bash
 PYTHONPATH=src python3 -m rch.cli init <workspace>
+PYTHONPATH=src python3 -m rch.cli go <workspace> --major 과학
 PYTHONPATH=src python3 -m rch.cli brainstorm <workspace>
 PYTHONPATH=src python3 -m rch.cli research-background <workspace>
 PYTHONPATH=src python3 -m rch.cli agents preflight <workspace>

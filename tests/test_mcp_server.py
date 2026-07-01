@@ -60,6 +60,25 @@ class McpOpsTests(unittest.TestCase):
             self.assertIn("ok", result)
             self.assertIn("errors", result)
 
+    def test_go_op_finishes_without_survey_or_photos(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = str(Path(tmp) / "ws")
+            result = mcp_server.op_go(
+                workspace,
+                major="과학",
+                interests="AI, 탐구",
+                competency="탐구력",
+                offline_research=True,
+                survey_items=4,
+                photo_count=2,
+            )
+            root = Path(workspace)
+            self.assertIn("build-hwpx", result["steps"])
+            self.assertTrue((root / "output" / "report.hwpx").exists())
+            self.assertTrue(result["missing_inputs"])
+            self.assertTrue((root / "input" / "surveys" / "analysis" / "survey-summary.md").exists())
+            self.assertTrue((root / "input" / "photos" / "analysis" / "photo-manifest.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
