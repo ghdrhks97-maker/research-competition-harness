@@ -1,57 +1,46 @@
-# 에이전트 오케스트레이션 모드 (Claude Code)
+# 에이전트 우선 오케스트레이션
 
-로컬 우선 `rch` CLI는 **결정적 골격**만 만듭니다(placeholder). 실제 보고서 문장·종합·비평은 LLM이 써야 합니다. 이 모드는 웹툰 하네스처럼 **Claude Code가 런타임이 되어 lane별 전문 서브에이전트를 조율**해 실제 내용을 채웁니다.
+이 하네스는 **에이전트 우선(agent-first)** 이다. 판단·분석·집필은 전부 에이전트가 하고, 파이썬(`rch`)은 LLM이 오히려 부정확한 **세 가지에만** 쓴다. 실행하는 앱(Claude Code / Antigravity / Codex)이 자기 서브에이전트/병렬 방식으로 돌린다.
+
+## 파이썬 경계 (딱 3가지)
+
+| `rch`가 하는 일 | 이유 |
+| --- | --- |
+| `import-survey` — 설문 통계(평균·효과크기·p값) | LLM은 산술에서 틀린다 |
+| `build-hwpx` — HWPX(OWPML zip) 생성 | LLM은 유효 바이너리를 못 만든다 |
+| `assemble`/`check --final`/`render-check` — 조립·검증 게이트 | 결정적 규칙 검사 |
+
+(+ `init` 폴더 골격, `import-rules` 양식 복사)
+
+**그 외 전부 에이전트.** 레퍼런스 구조 분석, insane 리서치, 브레인스토밍, 사진 개인정보, 본문 집필, 표 편집, 요약·목차·부록, 비평, 최종화. 과거 파이썬 콘텐츠 명령(`brainstorm/mine-references/research-background/draft/import-photos`)은 정확도가 낮아 **더 이상 쓰지 않는다**(에이전트가 대체).
 
 ## 구성
 
 ```
+AGENTS.md                              # 앱 공용 진입점(Codex/AGY/Gemini)
+GEMINI.md                              # AGENTS.md 포인터
 .claude/
-  skills/
-    report-orchestrator/SKILL.md   # 진입점. "연구보고서 만들어줘"에서 자동 트리거
-  agents/                          # lane별 전문 서브에이전트
-    brainstorm.md
-    reference-miner.md
-    survey-analyst.md
-    evidence-curator.md
-    draft-writer.md                # I~V장 본문 집필 (가장 중요)
-    table-layout.md
-    summary-sheet.md
-    toc-builder.md
-    appendix-builder.md
-    critic.md
-    finalizer.md
+  skills/report-orchestrator/SKILL.md  # Claude Code 진입점
+  agents/                              # 13개 전문 서브에이전트
+    brainstorm · reference-miner · background-researcher · photo-curator
+    survey-analyst · evidence-curator · draft-writer · table-layout
+    summary-sheet · toc-builder · appendix-builder · critic · finalizer
 ```
 
-## 하이브리드 원칙
+## 런타임 적응
 
-| 역할 | 담당 | 예 |
+| 앱 | 서브에이전트 실행 | 진입점 |
 | --- | --- | --- |
-| 결정적 분석·렌더·검증 | `rch` (파이썬) | 설문 통계, HWPX 렌더, check, 개인정보 스캔 |
-| 실제 글쓰기·종합·비평 | 서브에이전트 (LLM) | 본문 집필, 결과 해석, 요약서, 심사자 비평 |
+| Claude Code | `.claude/agents/`를 Task로 병렬 스폰 | `.claude/skills/report-orchestrator/` |
+| Antigravity | AGY 에이전트 매니저로 스폰 | `AGENTS.md` + MCP `rch-mcp` |
+| Codex | 병렬 태스크로 역할 분배(없으면 순차) | `AGENTS.md` |
 
-`rch`는 숫자를 만들지 않고, 에이전트는 숫자를 지어내지 않는다(분석 결과만 인용). 두 층이 합쳐져야 완성형 보고서가 나온다.
+역할 정의(`.claude/agents/<역할>.md`)는 세 앱이 공유한다.
 
-## 쓰는 법
+## 파이프라인
 
-작업공간 폴더에서 **Claude Code**를 열고 자연어로 요청합니다.
-
-```
-claude
-> 2026-음악대회 작업공간으로 교실수업개선 실천사례 연구대회, 음악, 중2, AI·에듀테크,
-  음악적 창의융합 역량 중심으로 연구보고서 만들어줘. 설문은 survey.csv, 사진은 photos/ 에 있어.
-```
-
-`report-orchestrator` 스킬이 트리거되어:
-1. Phase 0 인터뷰·`rch brainstorm`
-2. Phase 1 `rch import-survey/import-photos/mine-references/research-background`
-3. Phase 2 `draft-writer`·`survey-analyst` 등 서브에이전트가 실제 집필
-4. Phase 3 `critic` + `rch check`/`revise-loop` 루프
-5. Phase 4 `rch assemble`/`build-hwpx`/`render-check`
-
-## CLI만 쓰는 헤드리스 대안
-
-Claude Code 없이 돌리려면, `rch run-lanes <ws> <agent> --execute` 또는 `rch agents run`이 외부 에이전트 CLI(codex/claude/antigravity)에 lane 프롬프트를 던져 채우게 할 수 있습니다. 다만 오케스트레이션·품질 루프는 위 Claude Code 모드가 더 매끄럽습니다.
+인터뷰 → `brainstorm` → **[병렬]** `reference-miner`·`background-researcher`·`photo-curator`·`evidence-curator`·`survey-analyst`(+`rch import-survey`) → `draft-writer` → `table-layout`→`summary-sheet`/`toc-builder`/`appendix-builder` → `critic`+`rch check`/`revise-loop` → `finalizer`+`rch assemble`/`build-hwpx`/`render-check`.
 
 ## 안전
 
-모든 에이전트는 동일 안전 규칙을 따릅니다: 증거 없는 수치·학생 발화·성과 금지, 설문 수치는 분석 결과만, 개인정보 사진 배제, 레퍼런스 복사 금지, 최종 금지어 없음, HWPX 동시 편집 금지. `rch check --final`이 최종 게이트입니다.
+증거 없는 수치·발화·성과·인용 금지(→placeholder), 설문 수치는 `rch import-survey` 결과만, 위험 사진 배제, 레퍼런스·웹 복사 금지, 최종 금지어 없음, HWPX 조립 1회. `rch check --final`이 최종 게이트. 구조 통과 ≠ Hancom 실제 표시(사람이 한컴 확인).

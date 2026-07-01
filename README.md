@@ -82,7 +82,15 @@ rch revise-loop 2026-competition
 
 ## 어디서 쓰든 작동: Codex · Claude Code · Antigravity
 
-이 저장소는 **하이브리드 하네스**입니다. `rch`(파이썬)는 결정적 분석·렌더·검증만 하고 **숫자를 만들지 않으며**, 에이전트(LLM)가 실제 집필·종합·비평을 하되 **숫자를 지어내지 않습니다**(설문 수치는 rch 분석 결과만 인용). 순수 파이썬은 골격만, 실제 보고서는 에이전트가 씁니다.
+이 저장소는 **에이전트 우선(agent-first)** 하네스입니다. 판단·분석·집필은 전부 에이전트가 하고, 파이썬(`rch`)은 **LLM이 오히려 부정확한 세 가지에만** 씁니다.
+
+| 파이썬(`rch`)이 하는 일 | 이유 |
+| --- | --- |
+| `import-survey` — 설문 통계(평균·효과크기·p값) | LLM은 산술에서 틀림 |
+| `build-hwpx` — HWPX(OWPML zip) 생성 | LLM은 유효 바이너리를 못 만듦 |
+| `assemble`/`check --final`/`render-check` — 조립·검증 게이트 | 결정적 규칙 검사 |
+
+그 외 — 레퍼런스 구조 분석, insane 리서치(배경·선행연구), 브레인스토밍, 사진 개인정보, 본문 집필, 표 편집, 요약·목차·부록, 비평, 최종화 — 는 **전부 에이전트**가 합니다. (과거 파이썬 콘텐츠 명령 `brainstorm/mine-references/research-background/draft/import-photos`는 정확도가 낮아 콘텐츠 생성에 쓰지 않습니다.)
 
 세 앱 모두에서 같은 오케스트레이션이 돌도록 진입점 파일을 제공합니다.
 
@@ -98,9 +106,10 @@ rch revise-loop 2026-competition
 pip install -e ".[mcp]"     # rch + rch-mcp(MCP 서버) 설치
 ```
 
-- **Claude Code**: 작업공간 폴더에서 `claude` 실행 → 자연어 요청 시 `report-orchestrator` 스킬이 자동 트리거, `.claude/agents/`의 서브에이전트에 위임.
-- **Codex**: `codex` 실행 → 루트 `AGENTS.md`를 지침으로 읽고 같은 6단계 수행. MCP를 쓰려면 `~/.codex/config.toml`에 `[mcp_servers.rch] command = "rch-mcp"`.
-- **Antigravity**: `AGENTS.md`/`GEMINI.md`를 프로젝트 규칙으로 지정하고, MCP 설정에 `rch-mcp`를 등록하면 도구(`init/brainstorm/import_survey/draft/build_hwpx/...`)로 노출됩니다.
+각 앱은 **자기 서브에이전트/병렬 방식**으로 역할을 돌립니다(역할 정의 `.claude/agents/<이름>.md`는 공유).
+- **Claude Code**: `claude` 실행 → `report-orchestrator` 스킬이 트리거되어 `.claude/agents/`를 Task로 **병렬 스폰**.
+- **Antigravity**: `AGENTS.md`/`GEMINI.md`를 규칙으로 지정 + MCP `rch-mcp` 등록 → AGY 에이전트 매니저로 서브에이전트 스폰.
+- **Codex**: `codex` 실행 → 루트 `AGENTS.md`를 읽고 병렬 태스크로 역할 분배(없으면 순차). MCP는 `~/.codex/config.toml`에 `[mcp_servers.rch] command = "rch-mcp"`.
 
 어느 앱이든 자연어 한 줄로 시작합니다:
 
@@ -109,29 +118,31 @@ pip install -e ".[mcp]"     # rch + rch-mcp(MCP 서버) 설치
 연구보고서 만들어줘. 설문은 survey.csv, 사진은 photos/ 에 있어.
 ```
 
-### 6단계 오케스트레이션
+### 파이프라인 (의존성 = 병렬 그룹)
 
-인터뷰 → `rch` 분석(설문·사진·레퍼런스·배경) → **에이전트 집필**(draft-writer 등) → 비평·검증 루프(`critic` + `rch check`/`revise-loop`) → 조립·렌더(`assemble`/`build-hwpx`/`render-check`). 상세는 [`AGENTS.md`](AGENTS.md), [`docs/agent-orchestration.md`](docs/agent-orchestration.md), [`docs/mcp.md`](docs/mcp.md).
+인터뷰 → `brainstorm` → **[병렬]** `reference-miner`·`background-researcher`·`photo-curator`·`evidence-curator`·`survey-analyst`(+`rch import-survey`) → `draft-writer` → `table-layout`→`summary-sheet`/`toc-builder`/`appendix-builder` → `critic`+`rch check`/`revise-loop` → `finalizer`+`rch assemble`/`build-hwpx`/`render-check`. 상세는 [`AGENTS.md`](AGENTS.md), [`docs/agent-orchestration.md`](docs/agent-orchestration.md).
 
-### 에이전트별 사용법
+### 에이전트별 사용법 (13종)
 
-각 에이전트는 자기 lane의 계약 파일 4종(`lane-output.md`, `lane-output.json`, `claim-ledger.json`, `verdict.json`)을 채웁니다. 상세 지침은 `.claude/agents/<이름>.md`.
+각 에이전트는 자기 lane의 계약 파일 4종(`lane-output.md`, `lane-output.json`, `claim-ledger.json`, `verdict.json`)을 **진짜 내용**으로 채웁니다. 상세 지침은 `.claude/agents/<이름>.md`.
 
-| 에이전트 | 언제 실행 | 하는 일 | 읽는 입력 |
-| --- | --- | --- | --- |
-| `brainstorm` | Phase 0 이후 | 주제·제목·수업모형·실천과제 확정(2022 핵심역량 연계) | `input/ideas/`, `input/rules/` |
-| `reference-miner` | Phase 2 (병렬) | 레퍼런스 목차·표·부록 **구조만** 추출·적용 | `input/references/analysis/` |
-| `survey-analyst` | Phase 2 (병렬) | rch 설문 수치를 해석·서술(숫자 안 만듦) | `input/surveys/analysis/` |
-| `evidence-curator` | Phase 2 (병렬) | 주장↔증거 연결, claim 상태 확정 | `input/evidence/`, 분석 결과 |
-| `draft-writer` | Phase 2 (핵심) | I~V장 본문 집필(표 중심·최종 진술형) | 위 세 lane + 분석 결과 |
-| `table-layout` | draft 이후 | 표·카드 재편, 25쪽 압축 | `draft-writer` 출력 |
-| `summary-sheet` | draft 이후 | 요약서 | `draft-writer`, `table-layout` |
-| `toc-builder` | draft 이후 | 목차·페이지·제목 일관성 | `draft-writer`, `render-check` |
-| `appendix-builder` | draft 이후 | 과정안·루브릭·활동지·부록 | `input/evidence`, 사진/설문 분석 |
-| `critic` | Phase 3 | 심사자 관점 비평 → `machine-feedback.json` | 모든 lane 출력, 심사표 |
-| `finalizer` | Phase 4 | 정합화·HWPX 조립·렌더 검증 지휘 | 전체 lane + `output/` |
+| 에이전트 | 단계 | 하는 일 |
+| --- | --- | --- |
+| `brainstorm` | 0 | 주제·제목·수업모형·실천과제 확정(2022 핵심역량 연계) |
+| `reference-miner` | 1(병렬) | 우수 보고서 **원본을 직접 읽고** 목차·표·부록 구조 설계 |
+| `background-researcher` | 1(병렬) | **insane 리서치** — 이론적 배경·선행연구 조사(인용 날조 금지) |
+| `photo-curator` | 1(병렬) | 사진 **실제 검토**로 개인정보 판정·배치 분류 |
+| `survey-analyst` | 1(병렬) | `rch import-survey` 수치를 해석·서술(숫자 안 만듦) |
+| `evidence-curator` | 1(병렬) | 주장↔증거 연결, claim 상태 확정 |
+| `draft-writer` | 2(핵심) | I~V장 본문 집필(표 중심·최종 진술형) |
+| `table-layout` | 3 | 표·카드 재편, 25쪽 압축 |
+| `summary-sheet` | 3 | 요약서 |
+| `toc-builder` | 3 | 목차·페이지·제목 일관성 |
+| `appendix-builder` | 3 | 과정안·루브릭·활동지·부록 |
+| `critic` | 4 | 심사자 관점 비평 → `machine-feedback.json` |
+| `finalizer` | 5 | 정합화·HWPX 조립·렌더 검증 지휘 |
 
-Claude Code는 이 에이전트들을 서브에이전트로 자동 스폰합니다. Codex/Antigravity는 서브에이전트 스폰이 없으면 `AGENTS.md`의 순서대로 각 역할을 직접 수행합니다.
+Claude Code는 이들을 서브에이전트로 자동 스폰(병렬), Antigravity는 AGY 에이전트 매니저, Codex는 병렬 태스크로 돌립니다. 병렬 스폰이 없으면 `AGENTS.md`의 의존성 순서대로 수행합니다.
 
 ### 사용량
 
