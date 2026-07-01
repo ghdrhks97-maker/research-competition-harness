@@ -30,7 +30,9 @@
 | `rch import-photos <ws>` | 사진 매니페스트 + 개인정보 점검표(본문/요약/부록/제외 분류, 블러 지시) | `input/photos/analysis/` |
 | `rch mine-references <ws>` | 레퍼런스 보고서에서 목차·표 밀도·부록 패턴 등 **구조만** 추출 | `input/references/analysis/` |
 | `rch draft <ws>` | 분석 결과로 I~V장 본문·요약서·목차·부록 초안 생성(claim 태그 부착) | 쓰기 lane 4종 |
-| `rch run-lanes <ws> <agent>` | lane별 프롬프트 번들 생성(외부 에이전트 배정용) | `prompts/<agent>/` |
+| `rch run-lanes <ws> <agent>` | lane별 프롬프트 번들 생성(외부 에이전트 배정용). `--execute` 시 로그인 확인 후 실제 호출 | `prompts/<agent>/` |
+| `rch agents preflight <ws>` | Codex/Antigravity/Claude/Gemini CLI 설치·로그인 자동 확인 | `output/agent-preflight.{json,md}` |
+| `rch agents run <ws> <agent> --lanes ...` | 프롬프트를 에이전트 CLI로 실제 호출해 응답 수집 | `lanes/<lane>/<agent>/agent-response.md` |
 | `rch build-hwpx <ws>` | 조립된 bundle → HWPX(OWPML zip) 렌더 | `output/report.hwpx` |
 | `rch render-check <ws>` | HWPX 구조·XML·페이지 추정·목차-본문 일치·표 무결성 검증 | `output/render-check.{json,md}` |
 | `rch revise-loop <ws>` | critic·check·render-check 피드백을 우선순위 수정 백로그로 통합 | `output/revision-tasks.{json,md}` |
@@ -53,9 +55,40 @@ rch revise-loop 2026-competition
 
 각 명령은 `skills/` 아래 스킬 팩(`survey-analysis-skill` 등)으로 문서화되어 있습니다.
 
+## 에이전트 자동 호출 · 로그인 확인
+
+하네스는 외부 에이전트 CLI(Codex, Antigravity, Claude, Gemini)를 **실제로 실행**해 설치 여부와 **로그인 상태를 자동 확인**하고, lane 프롬프트를 에이전트에 직접 넘겨 응답을 수집합니다.
+
+```bash
+# 1) 초기 사전 점검: 설치 + 로그인 확인
+rch agents preflight 2026-competition
+rch agents preflight 2026-competition --agents codex claude --strict  # 미로그인 시 exit 1
+
+# 2) 프롬프트 번들 생성 후 로그인 확인과 함께 실제 호출까지 한 번에
+rch run-lanes 2026-competition codex --lanes survey-analyzer draft-writer --execute
+
+# 3) 이미 만든 번들을 특정 에이전트로 실행
+rch agents run 2026-competition gemini --lanes critic
+```
+
+로그인 상태는 **실제 프로세스 종료 코드**로 판정합니다(꾸며내지 않음). 판정값: `authenticated` / `unauthenticated` / `not_installed` / `unknown`(확인 명령 미설정).
+
+CLI마다 하위 명령이 달라 각 에이전트의 실행 명령을 환경변수로 조정할 수 있습니다(내장 기본값은 best-effort 추정치):
+
+| 환경변수 | 뜻 | 예 |
+| --- | --- | --- |
+| `RCH_AGENT_<NAME>_BIN` | 실행 파일 경로/이름 | `RCH_AGENT_CODEX_BIN=/usr/local/bin/codex` |
+| `RCH_AGENT_<NAME>_VERSION_ARGS` | 설치 확인 인자 | `--version` |
+| `RCH_AGENT_<NAME>_AUTH_ARGS` | 로그인 확인 인자(종료코드 0=로그인) | `login status` |
+| `RCH_AGENT_<NAME>_RUN_ARGS` | 프롬프트 전달 인자(`{prompt}`/`{prompt_file}` 치환) | `exec {prompt}` |
+
+`<NAME>`은 `CODEX`, `CLAUDE`, `GEMINI`, `ANTIGRAVITY`. 기본 레지스트리는 `rch agents list`로 확인합니다.
+
+에이전트가 남긴 응답(`agent-response.md`)은 자유 서술이므로, 에이전트는 이어서 lane 계약 파일(`lane-output.json`, `claim-ledger.json`, `verdict.json`)을 채워야 `check`/`assemble` 파이프라인에 반영됩니다.
+
 ## 여전히 사람이 확정하는 일
 
-- Codex/Antigravity/Claude/Gemini의 실제 호출(하네스는 프롬프트 번들만 생성)
+- 각 에이전트 CLI의 설치와 최초 로그인(하네스는 로그인 여부를 확인·차단하지만 로그인 자체는 사용자가 수행)
 - 사진 픽셀의 얼굴·이름·학번 노출 최종 확인
 - Hancom/HOP에서 실제로 열어 페이지 수·목차 번호·표 흐름·이미지 겹침 최종 확인
 - 자유응답 인용의 학생 동의·익명화 확정
