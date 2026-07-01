@@ -35,6 +35,17 @@ It still does not:
 
 Modules: `survey.py`/`stats.py`, `photos.py`, `references.py`, `draft.py`, `hwpx.py`/`docmodel.py`, `render_check.py`, `revise.py`, `run_lanes.py`.
 
+## MCP Server
+
+`mcp_server.py` (entry point `rch-mcp`, optional extra `[mcp]`) exposes the
+same engine as Model Context Protocol tools so Claude Code or Codex can
+drive report production by calling tools instead of a human running the
+CLI. The work lives in plain `op_*` functions (unit-testable, no MCP
+dependency); `build_server()` imports the MCP SDK lazily and registers them
+as tools. In this model the agent is the driver, so the `agents` runner
+(harness → AI) is not needed. See `docs/mcp.md` for Claude Code / Codex
+configuration.
+
 ## Conductor + Lanes
 
 The conductor is the CLI in `src/rch/cli.py`.
