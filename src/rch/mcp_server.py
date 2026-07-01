@@ -64,10 +64,12 @@ def op_brainstorm(workspace: str, major: str, **answers: str) -> dict[str, Any]:
             payload[key] = answers[key]
     bundle = brainstorm_mod.run_brainstorm(path, answers=payload)
     return {
+        "competition_name": bundle.answers.get("competition_name", ""),
+        "core_competencies_2022": bundle.core_competencies,
         "recommended_topic": bundle.recommended_topic,
         "recommended_title": bundle.titles[0] if bundle.titles else "",
         "titles": bundle.titles,
-        "topics": [topic.title_seed for topic in bundle.topics],
+        "topics": [{"topic": topic.title_seed, "core_competency": topic.core_competency} for topic in bundle.topics],
         "trends": bundle.trends,
         "ideas_dir": "input/ideas/",
     }
@@ -289,7 +291,7 @@ def build_server() -> Any:
         competency: str = "",
         constraints: str = "",
     ) -> dict[str, Any]:
-        """전공 인터뷰 답을 받아 트렌드 리서치·연구 주제·제목을 만들어 input/ideas에 쓴다."""
+        """인터뷰 답(대회명·전공·학년·상황·관심·도구·목표역량·제약)을 받아 트렌드 리서치·연구 주제·제목을 만들어 input/ideas에 쓴다. 주제·제목은 2022 개정 핵심역량과 반드시 연계된다."""
         return op_brainstorm(
             workspace, major, competition_name=competition_name, level=level, class_context=class_context, interests=interests,
             tools=tools, competency=competency, constraints=constraints,
