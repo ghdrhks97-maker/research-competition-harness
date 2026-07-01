@@ -68,11 +68,12 @@ LANE_SPECS: "OrderedDict[str, LaneSpec]" = OrderedDict(
             "reference-miner",
             {
                 "title": "레퍼런스 보고서 구조 추출",
-                "purpose": "우수 보고서에서 문장을 베끼지 않고 목차, 표, 결과 제시, 부록 패턴만 추출한다.",
-                "inputs": ["input/references/", "input/rules/"],
+                "purpose": "우수 보고서에서 문장을 베끼지 않고 목차, 표, 결과 제시, 부록 패턴과 이론적 배경 참고자료를 추출한다.",
+                "inputs": ["input/references/", "input/research/", "input/rules/"],
                 "process": [
                     "I 시작 - II 준비 - III 설계 - IV 실행/결과 - V 결론/제언 구조를 우선 확인한다.",
                     "실천과제 수, 표 밀도, 그림/아이콘 위치, 부록 구성, 결과 장 흐름을 뽑는다.",
+                    "`rch research-background` 결과의 배경지식·선행연구는 보고서 이론적 배경에 연결하되 원문 표현은 베끼지 않는다.",
                     "설문 결과를 평균, p값, 효과크기, 질적 인용으로 묶는 방식을 기록한다.",
                     "좋은 보고서의 장치만 추출하고 문장 표현은 새로 쓴다.",
                 ],
@@ -165,9 +166,10 @@ LANE_SPECS: "OrderedDict[str, LaneSpec]" = OrderedDict(
             {
                 "title": "보고서 본문 초안",
                 "purpose": "자료와 lane 결과를 바탕으로 최종 진술형 보고서 본문을 쓴다.",
-                "inputs": ["lanes/*/*/lane-output.md", "input/rules/"],
+                "inputs": ["lanes/*/*/lane-output.md", "input/rules/", "input/research/"],
                 "process": [
                     "I~V장 흐름으로 필요성, 준비, 설계, 실행, 결과, 제언을 연결한다.",
+                    "이론적 배경과 선행연구는 `input/research/background-research.json`의 출처를 확인해 표로 요약한다.",
                     "표가 말하고 본문이 해석하는 구조로 쓴다.",
                     "각 문단의 핵심 claim을 claim-ledger와 맞춘다.",
                     "AI 티가 나는 대구, 과도한 강조, 빈 수식어, 반복 키워드를 줄인다.",

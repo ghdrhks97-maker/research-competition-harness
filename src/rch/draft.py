@@ -35,6 +35,8 @@ DEFAULT_OUTLINE = [
 class DraftContext:
     title: str
     outline: list[str]
+    background_md: str
+    background_claims: list[dict[str, Any]]
     survey_summary_md: str
     survey_claims: list[dict[str, Any]]
     photo_body: list[str]
@@ -80,6 +82,10 @@ def gather_context(workspace: Path) -> DraftContext:
     survey_ledger = _read_json(workspace / "input" / "surveys" / "analysis" / "claim-ledger.json")
     survey_claims = survey_ledger.get("claims", []) if isinstance(survey_ledger, dict) else []
 
+    background_md = _strip_title(_read_text(workspace / "input" / "research" / "04-background-research.md"))
+    background_report = _read_json(workspace / "input" / "research" / "background-research.json")
+    background_claims = _background_claims(background_report)
+
     photo_manifest = _read_json(workspace / "input" / "photos" / "analysis" / "photo-manifest.json")
     photo_body: list[str] = []
     photo_appendix: list[str] = []
@@ -98,6 +104,8 @@ def gather_context(workspace: Path) -> DraftContext:
     return DraftContext(
         title=title,
         outline=outline,
+        background_md=background_md,
+        background_claims=background_claims,
         survey_summary_md=survey_summary,
         survey_claims=survey_claims,
         photo_body=photo_body,
@@ -114,11 +122,40 @@ def _extract_title(brainstorm_md: str) -> str:
     return ""
 
 
+def _background_claims(background_report: Any) -> list[dict[str, Any]]:
+    if not isinstance(background_report, dict) or background_report.get("fallback_used"):
+        return []
+    sources = background_report.get("sources")
+    if not isinstance(sources, list) or not sources:
+        return []
+    return [
+        {
+            "id": "background-research-used",
+            "text": "배경지식·선행연구 공개자료를 이론적 배경 작성에 참고",
+            "status": "derived",
+            "evidence": "input/research/background-research.json",
+            "notes": "공개자료 메타데이터 기반. 원문 직접 인용 전 사람이 확인.",
+        }
+    ]
+
+
 def _section_body(heading: str, context: DraftContext) -> tuple[str, list[dict[str, Any]]]:
     claims: list[dict[str, Any]] = []
     lines = [f"## {heading}", ""]
     lower = heading
-    if "결과" in lower or "IV" in heading or "V." in heading and "결과" in heading:
+    if "이론" in lower or "배경" in lower or "선행" in lower:
+        if context.background_md:
+            lines.append("브레인스토밍 이후 수집한 배경지식·선행연구 리서치는 다음과 같다.")
+            lines.append("")
+            lines.append(context.background_md)
+            lines.append("")
+            claims.extend(context.background_claims)
+            if not context.background_claims:
+                claims.append(_placeholder(f"{heading}-background", "live source 기반 배경연구 재확인 필요"))
+        else:
+            lines.append("이론적 배경과 선행연구는 `rch research-background` 결과로 채운다.")
+            claims.append(_placeholder(f"{heading}-background", "배경지식·선행연구 리서치 필요"))
+    elif "결과" in lower or "IV" in heading or "V." in heading and "결과" in heading:
         if context.survey_summary_md:
             lines.append("실천 과정에서 수집한 사전·사후 설문 결과는 다음과 같다.")
             lines.append("")
@@ -146,12 +183,17 @@ def _slug(text: str) -> str:
 def build_report_body(context: DraftContext) -> tuple[str, list[dict[str, Any]]]:
     lines = [f"# {context.title}", ""]
     claims: list[dict[str, Any]] = []
+    has_background_section = any("이론" in heading or "배경" in heading or "선행" in heading for heading in context.outline)
     for heading in context.outline:
         if heading.startswith("부록"):
             continue
         body, section_claims = _section_body(heading, context)
         lines.append(body)
         claims.extend(section_claims)
+        if not has_background_section and context.background_md and heading == context.outline[0]:
+            body, section_claims = _section_body("이론적 배경 및 선행연구", context)
+            lines.append(body)
+            claims.extend(section_claims)
     return "\n".join(lines).rstrip() + "\n", claims
 
 

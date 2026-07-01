@@ -27,6 +27,8 @@ class McpOpsTests(unittest.TestCase):
 
             mcp_server.op_import_photos(workspace)
             mcp_server.op_mine_references(workspace)
+            background = mcp_server.op_research_background(workspace, query="과학 탐구 수업", offline=True)
+            self.assertTrue(background["fallback_used"])
 
             drafted = mcp_server.op_draft(workspace)["drafted_lanes"]
             self.assertIn("draft-writer", drafted)

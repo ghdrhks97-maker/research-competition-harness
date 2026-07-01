@@ -6,6 +6,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from rch.background import run_background_research
 from rch import stats
 from rch.cli import assemble_workspace, init_workspace
 from rch.docmodel import parse_markdown
@@ -106,6 +107,91 @@ class ReferenceTests(unittest.TestCase):
             (source / "r.pdf").write_bytes(b"%PDF-1.4 fake")
             report = mine_references(source, source / "analysis")
             self.assertFalse(report.profiles[0].readable)
+
+
+class BackgroundResearchTests(unittest.TestCase):
+    def test_background_research_writes_public_sources_and_seeds_lane(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            init_workspace(workspace)
+
+            def fake_fetch(url: str) -> str:
+                if "api.openalex.org" in url:
+                    return json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "display_name": "Formative assessment and student agency in science classrooms",
+                                    "doi": "https://doi.org/10.1000/example",
+                                    "publication_year": 2024,
+                                    "authorships": [{"author": {"display_name": "A. Researcher"}}],
+                                    "abstract_inverted_index": {
+                                        "Formative": [0],
+                                        "assessment": [1],
+                                        "supports": [2],
+                                        "agency": [3],
+                                    },
+                                }
+                            ]
+                        }
+                    )
+                if "api.crossref.org" in url:
+                    return json.dumps({"message": {"items": []}})
+                if "export.arxiv.org" in url:
+                    return "<feed xmlns='http://www.w3.org/2005/Atom'></feed>"
+                if "s.jina.ai" in url:
+                    return "[Public background note](https://example.org/background)"
+                raise AssertionError(url)
+
+            research = run_background_research(
+                workspace,
+                query="AI 활용 과학 탐구 수업",
+                fetcher=fake_fetch,
+                max_results=3,
+            )
+
+            self.assertFalse(research.fallback_used)
+            self.assertTrue((workspace / "input" / "research" / "background-research.json").exists())
+            self.assertTrue((workspace / "input" / "research" / "04-background-research.md").exists())
+            self.assertTrue((workspace / "lanes" / "reference-miner" / "harness-background" / "lane-output.md").exists())
+
+    def test_draft_uses_background_research_section(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            init_workspace(workspace)
+
+            def fake_fetch(url: str) -> str:
+                if "api.openalex.org" in url:
+                    return json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "display_name": "Inquiry learning theory for science education",
+                                    "id": "https://openalex.org/W1",
+                                    "publication_year": 2023,
+                                    "abstract_inverted_index": {"Inquiry": [0], "learning": [1], "supports": [2]},
+                                }
+                            ]
+                        }
+                    )
+                if "api.crossref.org" in url:
+                    return json.dumps({"message": {"items": []}})
+                if "export.arxiv.org" in url:
+                    return "<feed xmlns='http://www.w3.org/2005/Atom'></feed>"
+                return ""
+
+            run_background_research(workspace, query="과학 탐구 수업", fetcher=fake_fetch)
+            generate_drafts(workspace)
+            report = (workspace / "lanes" / "draft-writer" / "harness-draft" / "lane-output.md").read_text(
+                encoding="utf-8"
+            )
+            ledger = json.loads(
+                (workspace / "lanes" / "draft-writer" / "harness-draft" / "claim-ledger.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertIn("이론적 배경 및 선행연구", report)
+            self.assertTrue(any(claim["id"] == "background-research-used" for claim in ledger["claims"]))
 
 
 class HwpxTests(unittest.TestCase):

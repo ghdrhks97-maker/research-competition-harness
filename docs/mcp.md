@@ -19,6 +19,7 @@ pip install -e ".[mcp]"     # mcp 패키지 포함 설치
 | --- | --- |
 | `init(workspace)` | 작업공간 생성 |
 | `brainstorm(workspace, major, level?, class_context?, interests?, tools?, competency?, constraints?)` | 인터뷰 답 → 트렌드·주제·제목 → input/ideas |
+| `research_background(workspace, query?, max_results?, offline?)` | 공개 route scheduler로 이론적 배경·선행연구 후보 수집 |
 | `import_survey(workspace, survey_path)` | 사전·사후 설문 익명 분석 |
 | `import_photos(workspace)` | 사진 개인정보 점검표 |
 | `mine_references(workspace)` | 레퍼런스 구조 추출 |
@@ -81,9 +82,9 @@ command = "rch-mcp"
 
 ## 사용 예 (에이전트 대화)
 
-> "`2026-대회` 작업공간 만들고, 전공은 과학, 관심은 AI·탐구로 브레인스토밍해줘. 그다음 `~/survey.csv` 설문 분석하고 초안까지 만들어줘."
+> "`2026-대회` 작업공간 만들고, 전공은 과학, 관심은 AI·탐구로 브레인스토밍해줘. 배경지식과 선행연구도 리서치하고, 그다음 `~/survey.csv` 설문 분석하고 초안까지 만들어줘."
 
-에이전트가 순서대로 `init → brainstorm → import_survey → draft → assemble → check`를 도구로 호출합니다.
+에이전트가 순서대로 `init → brainstorm → research_background → import_survey → draft → assemble → check`를 도구로 호출합니다.
 
 ## 참고
 

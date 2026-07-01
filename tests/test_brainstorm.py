@@ -87,6 +87,14 @@ class BrainstormWriteTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertTrue((workspace / "input" / "ideas" / "brainstorm.json").exists())
 
+    def test_cli_research_background_offline_writes_research_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            init_workspace(workspace)
+            code = main(["research-background", str(workspace), "--query", "과학 탐구 수업", "--offline"])
+            self.assertEqual(code, 0)
+            self.assertTrue((workspace / "input" / "research" / "background-research.json").exists())
+
     def test_cli_init_with_brainstorm_flag_requires_no_manual_ideas(self) -> None:
         # init --brainstorm would prompt interactively; ensure the flag is wired
         # by checking init alone leaves ideas empty, then scripted brainstorm fills it.

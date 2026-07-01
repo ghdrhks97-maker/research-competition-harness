@@ -17,6 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from rch import background as background_mod
 from rch import brainstorm as brainstorm_mod
 from rch import draft as draft_mod
 from rch import hwpx as hwpx_mod
@@ -79,6 +80,22 @@ def op_mine_references(workspace: str) -> dict[str, Any]:
     path = _ws(workspace)
     source = path / "input" / "references"
     report = references_mod.mine_references(source, source / "analysis")
+    return report.to_dict()
+
+
+def op_research_background(
+    workspace: str,
+    query: str = "",
+    max_results: int = 8,
+    offline: bool = False,
+) -> dict[str, Any]:
+    path = _ws(workspace)
+    report = background_mod.run_background_research(
+        path,
+        query=query or None,
+        max_results=max_results,
+        offline=offline,
+    )
     return report.to_dict()
 
 
@@ -146,7 +163,7 @@ def build_server() -> Any:
 
     app = FastMCP("rch", instructions=(
         "한국 수업혁신 연구대회 보고서 제작 하네스. 순서: init → brainstorm → "
-        "import_survey/import_photos/mine_references → draft → assemble → check(final) → "
+        "research_background/import_survey/import_photos/mine_references → draft → assemble → check(final) → "
         "build_hwpx → render_check → revise_loop. 증거 없는 수치·학생 발화·사진은 금지."
     ))
 
@@ -186,6 +203,16 @@ def build_server() -> Any:
     def mine_references(workspace: str) -> dict[str, Any]:
         """레퍼런스 보고서에서 목차·표 밀도·부록 패턴 등 구조만 추출한다."""
         return op_mine_references(workspace)
+
+    @app.tool()
+    def research_background(
+        workspace: str,
+        query: str = "",
+        max_results: int = 8,
+        offline: bool = False,
+    ) -> dict[str, Any]:
+        """공개 route scheduler로 이론적 배경·선행연구 후보를 수집한다."""
+        return op_research_background(workspace, query=query, max_results=max_results, offline=offline)
 
     @app.tool()
     def draft(workspace: str) -> dict[str, Any]:

@@ -7,7 +7,7 @@
 ## 현재 하네스가 하는 일
 
 - 새 연구대회 작업공간 생성
-- 아이디어, 공문, 레퍼런스, 증빙, 사진, 설문, raw_private 입력 폴더 생성
+- 아이디어, 배경연구, 공문, 레퍼런스, 증빙, 사진, 설문, raw_private 입력 폴더 생성
 - 14개 lane별 한국어 작업 지침 생성
 - 각 lane의 산출물 계약 고정
 - claim-ledger로 허위 주장, placeholder, 증거 누락 차단
@@ -29,6 +29,7 @@
 | 명령 | 하는 일 | 산출물 |
 | --- | --- | --- |
 | `rch brainstorm <ws>` | 전공 인터뷰 → 교육 트렌드 리서치 → 연구 주제·제목 자동 생성. 사람이 ideas 파일을 직접 쓰지 않음 | `input/ideas/` + brainstorm lane |
+| `rch research-background <ws>` | insane-search 방식의 public-route scheduler로 이론적 배경·선행연구 후보 수집(OpenAlex/CrossRef/arXiv/Jina route → fallback) | `input/research/` + reference-miner lane |
 | `rch import-survey <ws> <file>` | 사전·사후 설문 CSV/TSV/XLSX 익명 분석(평균·변화량·Cohen's d·t검정 p값·자유응답 요약·소표본 한계) | `input/surveys/analysis/` |
 | `rch import-photos <ws>` | 사진 매니페스트 + 개인정보 점검표(본문/요약/부록/제외 분류, 블러 지시) | `input/photos/analysis/` |
 | `rch mine-references <ws>` | 레퍼런스 보고서에서 목차·표 밀도·부록 패턴 등 **구조만** 추출 | `input/references/analysis/` |
@@ -45,6 +46,7 @@
 ```bash
 rch init 2026-competition
 rch brainstorm 2026-competition            # 전공 인터뷰 → 트렌드 → 주제·제목 → input/ideas/ 자동 작성
+rch research-background 2026-competition   # 이론적 배경·선행연구 후보 수집
 rch agents preflight 2026-competition
 # input/rules, input/references, input/surveys, input/photos, input/evidence 채우기 (ideas는 brainstorm이 채움)
 rch import-survey 2026-competition input/surveys/pre-post.csv
@@ -68,7 +70,7 @@ CLI로 직접 돌리는 대신 **Claude Code나 Codex가 하네스 기능을 도
 pip install -e ".[mcp]"     # rch-mcp (stdio MCP 서버) 설치
 ```
 
-Claude Code(`.mcp.json`) 또는 Codex(`~/.codex/config.toml`)에 `rch-mcp`를 등록하면 `init`, `brainstorm`, `import_survey`, `draft`, `build_hwpx`, `render_check` 등이 도구로 노출됩니다. 이때는 에이전트가 운전자이므로 `rch agents ...`(하네스가 AI를 호출) 기능은 필요 없습니다. 설정과 예시는 [`docs/mcp.md`](docs/mcp.md) 참고.
+Claude Code(`.mcp.json`) 또는 Codex(`~/.codex/config.toml`)에 `rch-mcp`를 등록하면 `init`, `brainstorm`, `research_background`, `import_survey`, `draft`, `build_hwpx`, `render_check` 등이 도구로 노출됩니다. 이때는 에이전트가 운전자이므로 `rch agents ...`(하네스가 AI를 호출) 기능은 필요 없습니다. 설정과 예시는 [`docs/mcp.md`](docs/mcp.md) 참고.
 
 ## 시작: 브레인스토밍으로 주제·제목 자동 생성
 
@@ -80,6 +82,7 @@ rch brainstorm 2026-competition                 # 대화형 인터뷰
 rch init 2026-competition --brainstorm          # init 직후 인터뷰까지 한 번에
 rch brainstorm 2026-competition --answers answers.json   # 비대화형(자동화/재현)
 rch brainstorm 2026-competition --agent claude  # 트렌드 리서치를 실제 에이전트로 보강
+rch brainstorm 2026-competition --research-background  # 주제 선정 직후 배경연구까지 실행
 ```
 
 인터뷰 항목: 전공 교과(필수), 학교급/학년, 학급 상황, 관심 트렌드, 활용 도구, 목표 역량, 제약. 답변만 하면 하네스가 다음을 자동 작성합니다.
@@ -91,6 +94,27 @@ rch brainstorm 2026-competition --agent claude  # 트렌드 리서치를 실제 
 - `input/ideas/brainstorm.json` — 기계 판독용 번들
 
 추천 제목은 `brainstorm` lane에도 자동 반영되어 이후 `rch draft`의 보고서 제목으로 이어집니다. 생성된 주제·제목은 `placeholder` claim으로 들어가며, 심사기준 대조와 최종 선택은 사람이 확정합니다.
+
+## 배경지식·선행연구 리서치
+
+`rch research-background`는 `insane-search` 방식에서 가져온 원칙을 보고서용 리서치에 적용합니다.
+
+- 한 번의 fetch 성공으로 끝내지 않고 route log를 남깁니다.
+- Phase 0: OpenAlex, CrossRef, arXiv 같은 공개 API를 먼저 씁니다.
+- Phase 1: Jina public search reader route를 시도합니다.
+- 실패하면 local curated fallback을 쓰되 `needs-work`로 표시합니다.
+- 로그인·페이월·개인자료 접근은 하지 않습니다.
+- 공개 웹 본문은 untrusted source material로 취급하고, 보고서에는 요약·근거 후보로만 반영합니다.
+
+산출물:
+
+```text
+input/research/background-research.json
+input/research/04-background-research.md
+lanes/reference-miner/harness-background/
+```
+
+`rch draft`는 이 결과를 읽어 본문에 `II. 이론적 배경 및 선행연구` 섹션을 자동 삽입합니다. live public source가 있으면 `derived` claim으로, fallback뿐이면 `placeholder`로 남겨 final 반영을 막습니다.
 
 비대화형 답변 파일 예시(`answers.json`):
 
@@ -165,6 +189,7 @@ rch check my-competition
 my-competition/
   input/
     ideas/        # 아이디어, 제목 후보, 수업 모형 메모
+    research/     # 배경지식, 선행연구, 이론적 배경 리서치
     rules/        # 공문, 규격, 심사표
     references/   # 우수 보고서
     evidence/     # 익명화된 수업 증빙

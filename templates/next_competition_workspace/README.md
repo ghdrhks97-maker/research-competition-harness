@@ -5,6 +5,7 @@ Put only current competition inputs here. Do not commit raw student data.
 ## Folder Map
 
 - `input/ideas/`: teacher notes, rough report ideas, model names.
+- `input/research/`: theory background and prior-research summaries from public routes.
 - `input/rules/`: official notice, rubric, page limit, template notes.
 - `input/references/`: reference reports for structure mining.
 - `input/evidence/`: anonymized classroom evidence.
@@ -16,14 +17,16 @@ Put only current competition inputs here. Do not commit raw student data.
 
 ## Flow
 
-1. Add rules, references, ideas, evidence, photos, and survey summaries.
-2. Run `rch bootstrap-lanes <workspace> <agent>`.
-3. Give each `lane-input.md` to the best agent or human owner.
-4. Let agents fill lane contracts.
-5. Run `rch check`.
-6. Run `rch assemble`.
-7. Run `rch check --final`.
-8. Hand the final bundle to one HWPX finalizer.
+1. Run `rch brainstorm <workspace>`.
+2. Run `rch research-background <workspace>`.
+3. Add rules, references, evidence, photos, and survey summaries.
+4. Run `rch bootstrap-lanes <workspace> <agent>`.
+5. Give each `lane-input.md` to the best agent or human owner.
+6. Let agents fill lane contracts.
+7. Run `rch check`.
+8. Run `rch assemble`.
+9. Run `rch check --final`.
+10. Hand the final bundle to one HWPX finalizer.
 
 ## Final Gate
 

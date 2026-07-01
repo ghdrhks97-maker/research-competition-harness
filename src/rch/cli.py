@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from rch import agents as agents_mod
+from rch import background as background_mod
 from rch import brainstorm as brainstorm_mod
 from rch import draft as draft_mod
 from rch import hwpx as hwpx_mod
@@ -25,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = ROOT / "templates" / "next_competition_workspace"
 
 LANES = tuple(LANE_SPECS)
-INPUT_DIRS = ("ideas", "rules", "references", "evidence", "photos", "surveys", "raw_private")
+INPUT_DIRS = ("ideas", "research", "rules", "references", "evidence", "photos", "surveys", "raw_private")
 FINAL_OUTPUT_MAP = {
     "report-draft.md": ("draft-writer",),
     "summary-sheet.md": ("summary-sheet",),
@@ -570,6 +571,16 @@ def mine_references_cmd(workspace: Path) -> None:
     print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
 
 
+def research_background_cmd(workspace: Path, query: str | None, max_results: int, offline: bool) -> None:
+    research = background_mod.run_background_research(
+        workspace,
+        query=query,
+        max_results=max_results,
+        offline=offline,
+    )
+    print(json.dumps(research.to_dict(), ensure_ascii=False, indent=2))
+
+
 def draft_cmd(workspace: Path) -> None:
     written = draft_mod.generate_drafts(workspace)
     print(json.dumps({"drafted_lanes": written}, ensure_ascii=False, indent=2))
@@ -635,7 +646,12 @@ def revise_loop_cmd(workspace: Path) -> None:
     print(json.dumps(backlog.to_dict(), ensure_ascii=False, indent=2))
 
 
-def brainstorm_cmd(workspace: Path, answers_path: Path | None, agent: str | None) -> None:
+def brainstorm_cmd(
+    workspace: Path,
+    answers_path: Path | None,
+    agent: str | None,
+    research_background: bool = False,
+) -> None:
     answers: dict[str, str] | None = None
     if answers_path is not None:
         loaded = json.loads(answers_path.read_text(encoding="utf-8"))
@@ -643,6 +659,12 @@ def brainstorm_cmd(workspace: Path, answers_path: Path | None, agent: str | None
             raise SystemExit("--answers 파일은 JSON 객체여야 합니다.")
         answers = {str(key): str(value) for key, value in loaded.items()}
     bundle = brainstorm_mod.run_brainstorm(workspace, answers=answers, agent=agent)
+    research_written: list[str] = []
+    research_source_count = 0
+    if research_background:
+        research = background_mod.run_background_research(workspace)
+        research_written = ["input/research/background-research.json", "input/research/04-background-research.md"]
+        research_source_count = len(research.sources)
     summary = {
         "major": bundle.answers.get("major", ""),
         "recommended_topic": bundle.recommended_topic,
@@ -652,6 +674,8 @@ def brainstorm_cmd(workspace: Path, answers_path: Path | None, agent: str | None
         "ideas_written": [f"input/ideas/{name}" for name in (
             "00-interview.md", "01-trend-research.md", "02-research-topics.md", "03-title-candidates.md", "brainstorm.json"
         )],
+        "research_written": research_written,
+        "research_source_count": research_source_count,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
@@ -694,11 +718,13 @@ def main(argv: list[str] | None = None) -> int:
     init_p = sub.add_parser("init", help="create a clean competition workspace")
     init_p.add_argument("workspace")
     init_p.add_argument("--brainstorm", action="store_true", help="run the brainstorm interview right after init")
+    init_p.add_argument("--research-background", action="store_true", help="after brainstorm, run public-route background research")
 
     brainstorm_p = sub.add_parser("brainstorm", help="interview → trend research → topic/title → input/ideas/")
     brainstorm_p.add_argument("workspace")
     brainstorm_p.add_argument("--answers", help="JSON file of interview answers (non-interactive)")
     brainstorm_p.add_argument("--agent", choices=tuple(agents_mod.AGENT_REGISTRY), help="augment trend research via an agent CLI")
+    brainstorm_p.add_argument("--research-background", action="store_true", help="run public-route theory/prior-research collection after topic selection")
 
     lane_p = sub.add_parser("lane", help="create lane inbox for an agent")
     lane_p.add_argument("workspace")
@@ -725,6 +751,12 @@ def main(argv: list[str] | None = None) -> int:
 
     refs_p = sub.add_parser("mine-references", help="extract structure from reference reports")
     refs_p.add_argument("workspace")
+
+    background_p = sub.add_parser("research-background", help="collect theory/background/prior research with public adaptive routes")
+    background_p.add_argument("workspace")
+    background_p.add_argument("--query", help="override topic/query instead of reading brainstorm output")
+    background_p.add_argument("--max-results", type=int, default=8)
+    background_p.add_argument("--offline", action="store_true", help="skip network routes and write verification-needed fallback")
 
     draft_p = sub.add_parser("draft", help="generate body/summary/toc/appendix drafts")
     draft_p.add_argument("workspace")
@@ -769,15 +801,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.cmd == "init":
+        if args.research_background and not args.brainstorm:
+            raise SystemExit("--research-background requires --brainstorm during init")
         init_workspace(Path(args.workspace))
         if args.brainstorm:
-            brainstorm_cmd(Path(args.workspace), None, None)
+            brainstorm_cmd(Path(args.workspace), None, None, research_background=args.research_background)
         return 0
     if args.cmd == "brainstorm":
         brainstorm_cmd(
             Path(args.workspace),
             Path(args.answers) if args.answers else None,
             args.agent,
+            research_background=args.research_background,
         )
         return 0
     if args.cmd == "lane":
@@ -801,6 +836,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "mine-references":
         mine_references_cmd(Path(args.workspace))
+        return 0
+    if args.cmd == "research-background":
+        research_background_cmd(Path(args.workspace), args.query, args.max_results, args.offline)
         return 0
     if args.cmd == "draft":
         draft_cmd(Path(args.workspace))

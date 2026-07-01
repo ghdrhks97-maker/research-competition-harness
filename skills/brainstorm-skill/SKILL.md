@@ -15,6 +15,7 @@ backing_command: rch brainstorm <workspace> [--answers file.json] [--agent <name
 3. **주제 합성**: 상위 트렌드 × 전공 × 역량으로 연구 주제 후보 3개를 점수와 함께 만들고 추천을 표시한다.
 4. **제목 브레인스토밍**: 알파벳 약어형·한글 스토리형 제목 후보 5개를 만든다.
 5. **자동 작성**: `input/ideas/`에 인터뷰·트렌드·주제·제목 파일과 `brainstorm.json`을 쓰고, 추천 제목을 `brainstorm` lane에 반영한다.
+6. **선택 배경연구**: `--research-background`를 붙이면 주제 선정 직후 `rch research-background`를 이어 실행한다.
 
 ## 실행
 ```bash
@@ -22,6 +23,7 @@ rch brainstorm my-competition                      # 대화형
 rch init my-competition --brainstorm               # init 직후 실행
 rch brainstorm my-competition --answers a.json     # 비대화형(자동화/테스트)
 rch brainstorm my-competition --agent claude       # 트렌드 리서치 보강
+rch brainstorm my-competition --research-background # 주제 선정 후 이론적 배경·선행연구 수집
 ```
 
 ## 금지선
