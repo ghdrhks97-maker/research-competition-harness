@@ -1,6 +1,6 @@
 ---
 name: agent-runner-skill
-description: 외부 에이전트 CLI(Codex/Antigravity/Claude/Gemini)를 실제로 실행해 설치·로그인을 자동 확인하고 lane 프롬프트를 호출한다.
+description: 외부 에이전트 CLI(Codex/Antigravity/Claude)를 실제로 실행해 설치·로그인을 자동 확인하고 lane 프롬프트를 호출한다.
 backing_command: rch agents preflight <workspace> · rch agents run <workspace> <agent> --lanes ...
 ---
 
@@ -19,7 +19,7 @@ backing_command: rch agents preflight <workspace> · rch agents run <workspace> 
 ```bash
 rch agents preflight my-competition --strict          # 미로그인 시 exit 1
 rch run-lanes my-competition codex --lanes draft-writer --execute
-rch agents run my-competition gemini --lanes critic
+rch agents run my-competition claude --lanes critic
 rch agents list                                        # 기본 레지스트리 확인
 ```
 

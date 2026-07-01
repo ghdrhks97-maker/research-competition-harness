@@ -23,7 +23,7 @@ It now also ships a generation engine, a render engine, and a quality loop:
 - `build-hwpx`: renders the assembled markdown bundle into an OWPML `.hwpx` container (headings, paragraphs, GFM tables, TOC, image embedding).
 - `render-check`: validates the `.hwpx` zip/OWPML structure, XML well-formedness, page estimate, table integrity, and TOC-vs-body heading match.
 - `revise-loop`: merges critic, check, and render-check feedback into one prioritized revision backlog.
-- `run-lanes`: builds per-lane prompt bundles for external agents (Codex/Antigravity/Claude/Gemini); `--execute` verifies login then dispatches.
+- `run-lanes`: builds per-lane prompt bundles for external agents (Codex/Antigravity/Claude); `--execute` verifies login then dispatches.
 - `agents preflight` / `agents run`: actually shell out to the external agent CLIs to confirm install, verify login by real process exit code, and dispatch lane prompts. Binaries and version/auth/run args are configurable via `RCH_AGENT_<NAME>_*` env vars.
 
 It still does not:
