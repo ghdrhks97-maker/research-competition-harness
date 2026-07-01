@@ -1,19 +1,30 @@
 # Competition Workspace Template
 
-Put only current competition inputs here.
+Put only current competition inputs here. Do not commit raw student data.
 
 ## Folder Map
 
-- `input/rules/`: official notice, rubric, template notes.
+- `input/ideas/`: teacher notes, rough report ideas, model names.
+- `input/rules/`: official notice, rubric, page limit, template notes.
 - `input/references/`: reference reports for structure mining.
-- `input/evidence/`: real classroom evidence. Do not commit real student data.
+- `input/evidence/`: anonymized classroom evidence.
+- `input/photos/`: photos after privacy review or redaction.
+- `input/surveys/`: anonymized survey tables and summarized metrics.
+- `input/raw_private/`: local-only raw files. Never commit.
 - `lanes/`: per-agent task inboxes and outputs.
-- `output/`: generated checks, reports, and final packaging evidence.
+- `output/`: checks, assembled markdown bundle, and final packaging evidence.
 
 ## Flow
 
-1. Add rules and references.
-2. Create lanes with `rch lane`.
-3. Let agents fill lane contracts.
-4. Run `rch check`.
-5. Finalizer assembles HWPX only after claims pass.
+1. Add rules, references, ideas, evidence, photos, and survey summaries.
+2. Run `rch bootstrap-lanes <workspace> <agent>`.
+3. Give each `lane-input.md` to the best agent or human owner.
+4. Let agents fill lane contracts.
+5. Run `rch check`.
+6. Run `rch assemble`.
+7. Run `rch check --final`.
+8. Hand the final bundle to one HWPX finalizer.
+
+## Current Boundary
+
+This template does not run external AI tools by itself. It prepares safe work lanes and final bundle structure.

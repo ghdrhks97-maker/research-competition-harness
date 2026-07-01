@@ -1,181 +1,164 @@
 # 연구대회 보고서 제작 하네스
 
-여러 AI 에이전트가 병렬로 아이디어, 레퍼런스 분석, 원고, 표 구성, 요약서, 아이콘/시각자료, 비평을 만들되 최종 `.hwpx`는 한 finalizer만 조립하게 하는 로컬 우선 하네스입니다.
+수업혁신사례 연구대회 보고서를 여러 AI 에이전트와 함께 만들기 위한 로컬 우선 하네스입니다.
 
-핵심 목표는 다음번 연구대회에서 같은 시행착오를 줄이는 것입니다.
+목표는 아이디어, 수업사진, 설문결과, 레퍼런스 보고서, 증빙 자료를 한 작업공간에 넣고, lane별 지침을 따라 보고서 본문·요약서·목차·부록·최종화 체크리스트까지 통제된 markdown bundle로 만드는 것입니다.
 
-- 보고서 아이디어 브레인스토밍
-- 레퍼런스 보고서 구조 추출
-- 내 보고서용 표 중심 원고화
-- 요약서 작성
-- 아이콘/시각자료 목록화
-- 근거 없는 주장 차단
-- 최종 HWPX 조립 전 검증
+## 현재 하네스가 하는 일
 
-## 핵심 원리
+- 새 연구대회 작업공간 생성
+- 아이디어, 공문, 레퍼런스, 증빙, 사진, 설문, raw_private 입력 폴더 생성
+- 14개 lane별 한국어 작업 지침 생성
+- 각 lane의 산출물 계약 고정
+- claim-ledger로 허위 주장, placeholder, 증거 누락 차단
+- lane output을 모아 아래 최종 bundle 생성
+  - `output/report-draft.md`
+  - `output/summary-sheet.md`
+  - `output/toc.md`
+  - `output/appendix.md`
+  - `output/finalization-checklist.md`
+  - `output/bundle-manifest.json`
+- `check --final`로 final bundle 누락, missing source lane, 금지 문구를 검사
 
-에이전트는 병렬로 일하지만 같은 `.hwpx`를 동시에 수정하지 않습니다.
+## 아직 자동으로 하지 않는 일
 
-각 에이전트는 자기 lane 폴더에 정해진 계약 파일만 남깁니다.
+- Codex, Antigravity, Claude, Gemini를 자동 호출하지 않음
+- raw 설문 스프레드시트나 사진을 자동 분석하지 않음
+- finished `.hwpx` 파일을 자동 생성하지 않음
+- Hancom/HOP 렌더 기준 페이지 수를 이 CLI 안에서 직접 검증하지 않음
 
-```text
-lane-output.md
-lane-output.json
-claim-ledger.json
-verdict.json
-evidence/
-```
+즉, 에이전트가 채워야 하는 `lane-output.md`, `claim-ledger.json`, `verdict.json`을 이 하네스가 대신 작성하지는 않습니다. 대신 “무엇을 어떻게 쓰고, 무엇을 쓰면 안 되는지”를 lane 지침으로 강하게 고정하고, 최종 병합 전 검사를 수행합니다.
 
-conductor는 lane 산출물을 모아 주장 근거, 형식, 금지 문구를 검사합니다. 그 뒤 finalizer 하나만 HWPX를 만들고 렌더링/Hancom 검증으로 넘깁니다.
-
-## 저장소 구성
-
-```text
-research-competition-harness/
-  src/rch/cli.py                         # init, lane, check CLI
-  schemas/                               # lane 산출물 JSON 형식
-  templates/next_competition_workspace/  # 새 연구대회 작업공간 뼈대
-  docs/architecture.md                   # conductor + lane 구조
-  docs/lane-contract.md                  # lane 산출물 계약
-  examples/synthetic/                    # 가짜 예시 데이터
-  tests/test_cli.py                      # CLI 핵심 테스트
-```
-
-이 저장소에는 실제 보고서, 학생 자료, 사진, 증빙, PDF, HWPX를 넣지 않습니다. 하네스 코드, 템플릿, 스키마, 문서, synthetic 예시만 둡니다.
-
-## 빠른 시작
-
-설치 없이 로컬에서 바로 실행:
+## 설치 없이 실행
 
 ```bash
 cd /Users/hongtaekwan/research-competition-harness
 PYTHONPATH=src python3 -m rch.cli init my-competition
-PYTHONPATH=src python3 -m rch.cli lane my-competition brainstorm codex
+PYTHONPATH=src python3 -m rch.cli bootstrap-lanes my-competition codex
 PYTHONPATH=src python3 -m rch.cli check my-competition
 ```
 
-CLI 명령어로 쓰고 싶으면 editable install:
+설치형 CLI:
 
 ```bash
 cd /Users/hongtaekwan/research-competition-harness
 python3 -m pip install -e .
 rch init my-competition
-rch lane my-competition brainstorm codex
+rch bootstrap-lanes my-competition codex
 rch check my-competition
 ```
 
 ## 작업공간 구조
 
-`rch init my-competition` 실행 뒤 생성되는 구조:
-
 ```text
 my-competition/
   input/
-    rules/        # 대회 공문, 규격, 심사표
-    references/   # 레퍼런스 보고서
-    evidence/     # 실제 수업 증빙
-  lanes/          # 에이전트별 작업함
-  output/         # 검사 결과, 최종 조립 산출물
+    ideas/        # 아이디어, 제목 후보, 수업 모형 메모
+    rules/        # 공문, 규격, 심사표
+    references/   # 우수 보고서
+    evidence/     # 익명화된 수업 증빙
+    photos/       # 개인정보 검토 또는 블러 처리된 사진
+    surveys/      # 익명화된 설문 표와 요약 지표
+    raw_private/  # 원자료. commit 금지
+  lanes/
+  output/
 ```
 
-실제 연구대회마다 새 작업공간을 만들고, 이 저장소에는 그 작업공간의 민감 자료를 commit하지 않습니다.
+## Lane 목록
 
-## Lane 종류
-
-| Lane | 추천 담당 | 역할 |
-| --- | --- | --- |
-| `brainstorm` | Antigravity / Codex | 주제, 제목, 연구 질문, 심사 기준 적합성 |
-| `reference-miner` | Claude / Gemini / Codex | 우수 보고서 구조, 표 패턴, 흐름 추출 |
-| `draft-writer` | Codex / Claude | claim-tagged 원고 작성 |
-| `table-layout` | Codex | 표 중심 보고서 지도 작성 |
-| `summary-sheet` | Codex / Antigravity | 요약서 구성 |
-| `icon-visual` | Codex / Antigravity | 아이콘, 차트, 시각자료 manifest |
-| `critic` | Claude / Gemini / Codex | 심사표, 형식, 익명성, 허위 주장 점검 |
-| `finalizer` | Codex | HWPX 조립, package/render/Hancom 검증 |
-
-lane 생성 예시:
-
-```bash
-PYTHONPATH=src python3 -m rch.cli lane my-competition reference-miner antigravity
-```
-
-생성 결과:
-
-```text
-my-competition/lanes/reference-miner/antigravity/
-  lane-input.md
-  evidence/
-```
-
-에이전트는 `lane-input.md`를 읽고 같은 폴더에 required output을 채웁니다.
+| Lane | 역할 |
+| --- | --- |
+| `intake` | 입력 자료 분류, 개인정보 위험, 누락 질문 |
+| `brainstorm` | 제목, 연구 질문, 수업 모형, 실천과제 |
+| `reference-miner` | 우수 보고서 구조·표·부록 패턴 추출 |
+| `evidence-curator` | 주장과 실제 증거 연결 |
+| `survey-analyzer` | 사전·사후 설문, 자유응답, 소표본 한계 분석 |
+| `photo-curator` | 수업사진 privacy/action/placement manifest |
+| `draft-writer` | claim-tagged 보고서 본문 |
+| `table-layout` | 표 중심 편집, 페이지 흐름, 캡션 |
+| `summary-sheet` | 요약서 구성 |
+| `toc-builder` | 목차, 제목 일관성, 페이지 번호 가정 |
+| `appendix-builder` | 과정안, 루브릭, 활동지, 설문지, 산출물 부록 |
+| `icon-visual` | 아이콘, 도식, 시각자료 manifest |
+| `critic` | 심사자 관점 리뷰, 개인정보, 허위 주장, AI 티 점검 |
+| `finalizer` | 최종 bundle/HWPX 조립 전 체크리스트 |
 
 ## Lane 산출물 계약
 
-모든 lane은 아래 파일을 만들어야 합니다.
+각 lane은 아래 파일을 채웁니다.
 
 ```text
-lane-output.md       # 사람이 읽는 결과
-lane-output.json     # 기계가 읽는 요약
-claim-ledger.json    # 주장과 근거 상태
-verdict.json         # pass / needs-work / blocked
-evidence/            # 해당 lane이 사용한 증빙
+lanes/<lane>/<agent>/
+  lane-input.md       # 하네스가 생성하는 작업 지침
+  lane-output.md      # 사람이 읽는 산출물
+  lane-output.json    # 기계가 읽는 요약
+  claim-ledger.json   # 주장과 근거 상태
+  verdict.json        # pass / needs-work / blocked
+  evidence/           # 해당 lane에서 쓴 보조 근거
 ```
 
-`claim-ledger.json` claim status:
+`claim-ledger.json` status:
 
-| Status | 뜻 | 최종 반영 |
+| Status | 뜻 | final 반영 |
 | --- | --- | --- |
 | `real` | 실제 증빙으로 직접 확인 | 가능 |
-| `derived` | 실제 증빙에서 계산/도출 | 가능 |
-| `placeholder` | draft용 자리표시자 | 불가 |
-| `forbidden` | 보고서에 들어가면 안 됨 | 불가 |
+| `derived` | 실제 증빙에서 계산/도출, 방법 기록 | 가능 |
+| `placeholder` | 초안용 자리표시자 | 불가 |
+| `forbidden` | 보고서 반영 금지 | 불가 |
 
-최종 후보(`--final`)는 `real`, `derived`만 통과합니다. 둘 다 evidence path가 필요합니다.
-
-## 검사 명령
-
-일반 검사:
+## 추천 운영 흐름
 
 ```bash
-PYTHONPATH=src python3 -m rch.cli check my-competition
+rch init 2026-competition
 ```
 
-최종 후보 검사:
+1. `input/rules/`에 공문, 심사표, 양식 넣기
+2. `input/references/`에 우수 보고서 넣기
+3. `input/ideas/`에 수업 아이디어와 제목 후보 넣기
+4. `input/evidence/`에 익명화된 수업 증빙 넣기
+5. `input/photos/`에 개인정보 검토된 사진 넣기
+6. `input/surveys/`에 익명화된 설문 결과 넣기
+7. `input/raw_private/`에는 원자료를 임시 보관하되 commit하지 않기
+8. `rch bootstrap-lanes 2026-competition codex`
+9. 각 lane의 `lane-input.md`를 Codex, Antigravity, Claude/Gemini, 사람에게 배정
+10. 각 agent가 lane 계약 파일 작성
+11. `rch check 2026-competition`
+12. `rch assemble 2026-competition`
+13. `rch check 2026-competition --final`
+14. finalizer가 bundle을 바탕으로 HWPX 조립
+15. Hancom/HOP 렌더, 목차 페이지, 표 흐름, 개인정보를 사람이 최종 검증
+
+## Assemble
 
 ```bash
-PYTHONPATH=src python3 -m rch.cli check my-competition --final
+PYTHONPATH=src python3 -m rch.cli assemble my-competition
 ```
 
-검사 결과는 콘솔과 아래 파일에 남습니다.
+생성 파일:
 
 ```text
-my-competition/output/harness-check.json
+output/report-draft.md
+output/summary-sheet.md
+output/toc.md
+output/appendix.md
+output/finalization-checklist.md
+output/bundle-manifest.json
 ```
 
-현재 검사하는 것:
-
-- lane 필수 파일 존재 여부
-- JSON parse 가능 여부
-- `verdict.status` 값 유효성
-- `claim-ledger.json`의 `claims[]` 존재 여부
-- claim status 유효성
-- 최종 후보에서 `placeholder`, `forbidden` claim 차단
-- `real`, `derived` claim의 evidence path 누락 차단
-- 최종 후보에서 금지 문구 차단
+`bundle-manifest.json`에는 각 파일 SHA-256과 source lane이 남습니다. source lane이 비면 `check --final`에서 실패합니다.
 
 ## 금지선
 
-최종 보고서 본문에는 아래를 넣지 않습니다.
+- 증거 없는 학생 발화 금지
+- 증거 없는 설문 수치 금지
+- 증거 없는 수업 결과 금지
+- 확정되지 않은 확산 실적 금지
+- AI 생성 이미지나 목업을 실제 증빙처럼 사용 금지
+- 학생 얼굴, 이름, 학번, 개인 화면이 남은 사진 final 반영 금지
+- 레퍼런스 보고서 문장 복사 금지
+- 여러 에이전트의 동시 `.hwpx` 수정 금지
 
-- 지어낸 학생 발화
-- 지어낸 설문 수치
-- 지어낸 수업 결과
-- 지어낸 확산/공유 실적
-- 출처 없는 사진/스크린샷
-- 레퍼런스 보고서 문장 복사
-- 여러 에이전트의 동시 HWPX 수정
-
-최종 후보 검사에서 아래 문구도 막습니다.
+final 문구 금지:
 
 ```text
 예정
@@ -186,40 +169,6 @@ my-competition/output/harness-check.json
 TODO
 ```
 
-## 추천 운영 흐름
-
-1. `rch init <workspace>`로 새 대회 작업공간 생성
-2. `input/rules/`에 공문, 규격, 심사표 저장
-3. `input/references/`에 우수 보고서 저장
-4. `input/evidence/`에 실제 수업 증빙 저장
-5. lane별 inbox 생성
-6. Codex, Antigravity, Claude/Gemini가 자기 lane만 채움
-7. `rch check`로 중간 점검
-8. `rch check --final`로 최종 후보 점검
-9. finalizer가 하나의 HWPX로 조립
-10. package/render/Hancom 검증 뒤 최종본 확정
-
-## Antigravity/Codex 병렬 사용 방식
-
-Antigravity나 다른 도구가 직접 이 Python CLI를 몰라도 됩니다. 파일 계약만 지키면 됩니다.
-
-예:
-
-```text
-lanes/brainstorm/antigravity/lane-input.md
-```
-
-이 파일을 Antigravity에 주고, 결과를 같은 폴더에 아래처럼 저장하게 합니다.
-
-```text
-lanes/brainstorm/antigravity/lane-output.md
-lanes/brainstorm/antigravity/lane-output.json
-lanes/brainstorm/antigravity/claim-ledger.json
-lanes/brainstorm/antigravity/verdict.json
-```
-
-Codex는 finalizer나 검사 자동화처럼 파일 시스템과 검증에 강한 일을 맡깁니다. Antigravity는 아이디어, 구조 제안, 시각 방향처럼 발산 작업에 쓰면 좋습니다.
-
 ## 테스트
 
 ```bash
@@ -227,21 +176,12 @@ cd /Users/hongtaekwan/research-competition-harness
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-## GitHub 사용
-
-변경 후 push:
+## GitHub
 
 ```bash
-cd /Users/hongtaekwan/research-competition-harness
 git add .
-git commit -m "docs: translate README to Korean"
+git commit -m "feat: add report production lane workflow"
 git push
 ```
 
-현재 remote:
-
-```text
-https://github.com/ghdrhks97-maker/research-competition-harness
-```
-
-private repo입니다.
+Repo: `https://github.com/ghdrhks97-maker/research-competition-harness`

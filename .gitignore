@@ -5,13 +5,18 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+.omo/
 
-# Real report artifacts stay out of this repo.
+# Real report artifacts stay out of this repo, including nested workspaces.
 *.hwpx
 *.hwp
 *.pdf
 *.zip
-input/evidence/*
-input/class_photos/*
-output/*
+**/input/evidence/*
+**/input/photos/*
+**/input/surveys/*
+**/input/raw_private/*
+**/input/class_photos/*
+**/output/*
+!**/.gitkeep
 !examples/synthetic/**
