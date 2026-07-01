@@ -1,0 +1,16 @@
+{
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Students practiced checking their own reasoning with a question-first AI tutor.",
+      "status": "real",
+      "evidence": "evidence/synthetic-class-note.md"
+    },
+    {
+      "id": "c2",
+      "text": "Error rate decreased after the unit.",
+      "status": "placeholder",
+      "notes": "Replace with real log analysis before final candidate."
+    }
+  ]
+}
