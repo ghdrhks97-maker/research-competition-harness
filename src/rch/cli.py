@@ -660,6 +660,7 @@ def brainstorm_cmd(
     agent: str | None,
     research_background: bool = False,
     competition_name: str | None = None,
+    field_answers: dict[str, str] | None = None,
 ) -> None:
     answers: dict[str, str] | None = None
     if answers_path is not None:
@@ -670,6 +671,10 @@ def brainstorm_cmd(
     if competition_name:
         answers = answers or {}
         answers["competition_name"] = competition_name
+    # Per-field flags let an agent pass interview answers directly, no file.
+    if field_answers:
+        answers = answers or {}
+        answers.update({key: value for key, value in field_answers.items() if value})
     bundle = brainstorm_mod.run_brainstorm(workspace, answers=answers, agent=agent)
     research_written: list[str] = []
     research_source_count = 0
@@ -678,7 +683,9 @@ def brainstorm_cmd(
         research_written = ["input/research/background-research.json", "input/research/04-background-research.md"]
         research_source_count = len(research.sources)
     summary = {
+        "competition_name": bundle.answers.get("competition_name", ""),
         "major": bundle.answers.get("major", ""),
+        "core_competencies_2022": bundle.core_competencies,
         "recommended_topic": bundle.recommended_topic,
         "recommended_title": bundle.titles[0] if bundle.titles else "",
         "topic_count": len(bundle.topics),
@@ -1015,6 +1022,14 @@ def main(argv: list[str] | None = None) -> int:
     brainstorm_p.add_argument("--competition-name", help="참가 예정 연구대회명")
     brainstorm_p.add_argument("--agent", choices=tuple(agents_mod.AGENT_REGISTRY), help="augment trend research via an agent CLI")
     brainstorm_p.add_argument("--research-background", action="store_true", help="run public-route theory/prior-research collection after topic selection")
+    # Per-field flags so an agent can pass interview answers directly, no file.
+    brainstorm_p.add_argument("--major", help="전공 교과/분야 (필수)")
+    brainstorm_p.add_argument("--level", help="학교급/학년")
+    brainstorm_p.add_argument("--class-context", dest="class_context", help="학급/수업 상황")
+    brainstorm_p.add_argument("--interests", help="관심 트렌드/키워드")
+    brainstorm_p.add_argument("--tools", help="활용 도구")
+    brainstorm_p.add_argument("--competency", help="목표 역량")
+    brainstorm_p.add_argument("--constraints", help="기타 제약 조건")
 
     go_p = sub.add_parser("go", help="short autopilot: brainstorm → research → placeholders → draft → hwpx")
     go_p.add_argument("workspace")
@@ -1120,12 +1135,18 @@ def main(argv: list[str] | None = None) -> int:
             brainstorm_cmd(Path(args.workspace), None, None, research_background=args.research_background)
         return 0
     if args.cmd == "brainstorm":
+        field_answers = {
+            key: getattr(args, key)
+            for key in ("major", "level", "class_context", "interests", "tools", "competency", "constraints")
+            if getattr(args, key, None)
+        }
         brainstorm_cmd(
             Path(args.workspace),
             Path(args.answers) if args.answers else None,
             args.agent,
             research_background=args.research_background,
             competition_name=args.competition_name,
+            field_answers=field_answers,
         )
         return 0
     if args.cmd == "go":
