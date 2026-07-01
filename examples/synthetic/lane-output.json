@@ -1,0 +1,12 @@
+{
+  "lane": "brainstorm",
+  "agent": "synthetic",
+  "summary": "Synthetic example showing lane contract shape.",
+  "artifacts": [
+    {
+      "path": "claim-ledger.json",
+      "kind": "claim-ledger",
+      "description": "Example claims with mixed statuses."
+    }
+  ]
+}
