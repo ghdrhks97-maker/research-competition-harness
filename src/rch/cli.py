@@ -688,6 +688,7 @@ def run_lanes_cmd(workspace: Path, agent: str, lanes: list[str] | None, execute:
 BUILD_GATE_MARKERS = (*FINAL_FORBIDDEN, "(생략", "삽입 예정", "분량 계획표:", "확정한다.]")
 # A body this thin is a skeleton, not a report (chars ≈ pages * 1600).
 BUILD_GATE_MIN_CHARS = 8000
+FORCE_PREVIEW_HWPX = "report-preview.hwpx"
 
 
 def _build_quality_gate(bundle_paths: list[Path]) -> list[str]:
@@ -743,7 +744,14 @@ def build_hwpx_cmd(
             + " | ".join(final_check.errors[:8]),
             file=sys.stderr,
         )
-    target = output_path or (output_dir / "report.hwpx")
+    preview_build = force and (bool(findings) or not final_check.ok)
+    final_target = output_dir / "report.hwpx"
+    if preview_build and output_path and output_path.resolve(strict=False) == final_target.resolve(strict=False):
+        raise SystemExit(
+            "--force 빌드는 output/report.hwpx에 쓸 수 없습니다. "
+            f"중간 확인은 --output output/{FORCE_PREVIEW_HWPX}처럼 preview 파일명을 쓰세요."
+        )
+    target = output_path or (output_dir / (FORCE_PREVIEW_HWPX if preview_build else "report.hwpx"))
     if engine == "kordoc":
         _build_hwpx_kordoc(workspace, existing, target)
         return
@@ -758,6 +766,9 @@ def build_hwpx_cmd(
         "embedded_images": result.embedded_images,
         "missing_images": result.missing_images,
     }
+    if preview_build:
+        summary["preview"] = True
+        summary["note"] = "final gate/build gate 실패 상태의 중간 확인본입니다. 제출용 output/report.hwpx가 아닙니다."
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
@@ -891,6 +902,10 @@ def diagnose_cmd(workspace: Path) -> int:
     if not hwpx_path.exists():
         signals.append("output/report.hwpx 없음.")
     else:
+        if not final_result.ok:
+            signals.append(
+                "output/report.hwpx가 있지만 final gate 실패 상태입니다 — 이전/강제 렌더 산출물로 보고, 제출용 최종본으로 쓰면 안 됩니다."
+            )
         try:
             with zipfile.ZipFile(hwpx_path) as archive:
                 section = archive.read("Contents/section0.xml").decode("utf-8", errors="replace")

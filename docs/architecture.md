@@ -25,7 +25,7 @@ It now also ships a generation engine, a render engine, and a quality loop:
 - `import-photos`: photo manifest + privacy checklist (safe-by-default `unreviewed`, blur instructions, body/summary/appendix/exclude placement).
 - `mine-references`: structure-only extraction (outline, table density, appendix pattern) from `.md`/`.txt`/`.hwpx` references.
 - `draft`: composes I~V body, summary, TOC, and appendix drafts from the analyses into the writing lanes with claim tags.
-- `build-hwpx`: renders only a final-gate-passing assembled markdown bundle into an OWPML `.hwpx` container (headings, paragraphs, GFM tables, TOC, image embedding). `--force` is for diagnostic builds only.
+- `build-hwpx`: renders only a final-gate-passing assembled markdown bundle into an OWPML `.hwpx` container (headings, paragraphs, GFM tables, TOC, image embedding). `--force` is for diagnostic builds only and writes preview output, not `output/report.hwpx`.
 - `render-check`: validates the `.hwpx` zip/OWPML structure, XML well-formedness, page estimate, table integrity, and TOC-vs-body heading match.
 - `revise-loop`: merges critic, check, and render-check feedback into one prioritized revision backlog.
 - `run-lanes`: builds per-lane prompt bundles for external agents (Codex/Antigravity/Claude); `--execute` verifies login then dispatches.

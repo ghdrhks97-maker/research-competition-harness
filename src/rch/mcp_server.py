@@ -150,7 +150,7 @@ def op_next(workspace: str) -> dict[str, Any]:
 
 
 def op_build_hwpx(workspace: str, output: str | None = None, force: bool = False) -> dict[str, Any]:
-    from rch.cli import _build_quality_gate  # shared pre-build gate
+    from rch.cli import FORCE_PREVIEW_HWPX, _build_quality_gate  # shared pre-build gate
 
     path = _ws(workspace)
     output_dir = path / "output"
@@ -178,9 +178,20 @@ def op_build_hwpx(workspace: str, output: str | None = None, force: bool = False
                 "중간 확인용은 force=true."
             ),
         }
-    target = Path(output).expanduser() if output else output_dir / "report.hwpx"
+    preview_build = force and (bool(findings) or not final_check.ok)
+    final_target = output_dir / "report.hwpx"
+    target = Path(output).expanduser() if output else output_dir / (FORCE_PREVIEW_HWPX if preview_build else "report.hwpx")
+    if preview_build and target.resolve(strict=False) == final_target.resolve(strict=False):
+        return {
+            "ok": False,
+            "refused": True,
+            "reason": (
+                "force=true 빌드는 output/report.hwpx에 쓸 수 없습니다. "
+                f"중간 확인은 output/{FORCE_PREVIEW_HWPX} 같은 preview 파일명을 쓰세요."
+            ),
+        }
     result = hwpx_mod.build_hwpx_from_bundle(bundle, target, images_root=path)
-    return {
+    response = {
         "hwpx": str(target),
         "paragraphs": result.paragraph_count,
         "tables": result.table_count,
@@ -188,6 +199,10 @@ def op_build_hwpx(workspace: str, output: str | None = None, force: bool = False
         "images": result.image_count,
         "missing_images": result.missing_images,
     }
+    if preview_build:
+        response["preview"] = True
+        response["note"] = "final gate/build gate 실패 상태의 중간 확인본입니다. 제출용 output/report.hwpx가 아닙니다."
+    return response
 
 
 def op_render_check(workspace: str, hwpx: str | None = None, page_limit: int = 25) -> dict[str, Any]:

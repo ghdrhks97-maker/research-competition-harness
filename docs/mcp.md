@@ -29,7 +29,7 @@ pip install -e ".[mcp]"     # mcp 패키지 포함 설치
 | `draft(workspace)` | I~V장 본문·요약·목차·부록 초안 |
 | `assemble(workspace)` | 번들 조립 |
 | `check(workspace, final?, allow_expected?)` | 계약·증거·금지어 검증. `allow_expected`는 라벨링된 예상값(`expected`) 주장을 final에서 허용 |
-| `build_hwpx(workspace, output?, force?)` | final gate와 품질 gate 통과 bundle만 HWPX 렌더. 중간 확인만 `force=true` |
+| `build_hwpx(workspace, output?, force?)` | final gate와 품질 gate 통과 bundle만 HWPX 렌더. `force=true` 중간 확인본은 final 파일명 대신 preview 파일로 저장 |
 | `render_check(workspace, hwpx?, page_limit?)` | HWPX 구조·페이지 검증 |
 | `revise_loop(workspace)` | 피드백 백로그 통합 |
 | `next(workspace)` | autopilot: 다음 작업(위임/명령)을 결정적으로 판정. `needs_user`가 비면 actions 실행 후 재호출, `done=true`까지 반복 |
