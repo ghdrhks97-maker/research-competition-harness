@@ -37,6 +37,14 @@ SECTION_NS = "http://www.hancom.co.kr/hwpml/2011/section"
 BODY_PARA = 0
 HEADING_PARA = {1: 1, 2: 2, 3: 3, 4: 3, 5: 3, 6: 3}
 HEADING_CHAR = {1: 1, 2: 2, 3: 3, 4: 3, 5: 3, 6: 3}
+# Report styling: the first H1 becomes a large centered title, table header
+# rows get an accent-colored bold face on a shaded fill.
+TITLE_PARA = 4
+TITLE_CHAR = 5
+TABLE_HEADER_PARA = 4  # centered
+TABLE_HEADER_CHAR = 4
+ACCENT_COLOR = "#1F4E79"
+TABLE_HEADER_FILL = "#D9E2F3"
 
 
 @dataclass
@@ -71,11 +79,17 @@ def _table(rows: list[list[str]]) -> str:
         parts.append("<hp:tr>")
         for col_index in range(col_count):
             cell = row[col_index] if col_index < len(row) else ""
-            char_id = 2 if row_index == 0 else 0  # header row uses bold char shape
+            header = row_index == 0
+            fill_id = 2 if header else 1  # header row sits on a shaded fill
+            para = _paragraph(
+                cell,
+                TABLE_HEADER_PARA if header else BODY_PARA,
+                TABLE_HEADER_CHAR if header else 0,
+            )
             parts.append(
-                '<hp:tc borderFillIDRef="1"><hp:cellAddr colAddr="{col}" rowAddr="{r}"/>'
+                '<hp:tc borderFillIDRef="{fill}"><hp:cellAddr colAddr="{col}" rowAddr="{r}"/>'
                 '<hp:cellSpan colSpan="1" rowSpan="1"/><hp:subList>{para}</hp:subList></hp:tc>'.format(
-                    col=col_index, r=row_index, para=_paragraph(cell, BODY_PARA, char_id)
+                    fill=fill_id, col=col_index, r=row_index, para=para
                 )
             )
         parts.append("</hp:tr>")
@@ -87,11 +101,16 @@ def _table(rows: list[list[str]]) -> str:
 def _blocks_to_section(blocks: list[Block], images_root: Path, result: BuildResult) -> str:
     body: list[str] = []
     bin_index = 0
+    title_pending = True  # the first H1 renders as the document title
     for block in blocks:
         if block.kind == "heading":
-            body.append(
-                _paragraph(block.text, HEADING_PARA.get(block.level, 3), HEADING_CHAR.get(block.level, 3))
-            )
+            if block.level == 1 and title_pending:
+                body.append(_paragraph(block.text, TITLE_PARA, TITLE_CHAR))
+                title_pending = False
+            else:
+                body.append(
+                    _paragraph(block.text, HEADING_PARA.get(block.level, 3), HEADING_CHAR.get(block.level, 3))
+                )
             result.heading_count += 1
         elif block.kind == "paragraph":
             body.append(_paragraph(block.text))
@@ -129,17 +148,30 @@ def _header_xml() -> str:
         "<hh:refList>"
         '<hh:fontfaces itemCnt="1"><hh:fontface lang="HANGUL" fontCnt="1">'
         '<hh:font id="0" face="함초롬바탕" type="TTF" isEmbedded="0"/></hh:fontface></hh:fontfaces>'
-        '<hh:charProperties itemCnt="4">'
-        + "".join(_char_property(index, height, bold) for index, (height, bold) in enumerate(
-            [(1000, 0), (1600, 1), (1300, 1), (1100, 1)]
-        ))
+        '<hh:charProperties itemCnt="6">'
+        + "".join(
+            _char_property(index, height, bold, color)
+            for index, (height, bold, color) in enumerate(
+                [
+                    (1000, 0, "#000000"),  # 0 body
+                    (1600, 1, ACCENT_COLOR),  # 1 H1 장 제목
+                    (1300, 1, ACCENT_COLOR),  # 2 H2
+                    (1100, 1, "#000000"),  # 3 H3+
+                    (1000, 1, ACCENT_COLOR),  # 4 table header
+                    (2000, 1, ACCENT_COLOR),  # 5 document title
+                ]
+            )
+        )
         + "</hh:charProperties>"
-        '<hh:paraProperties itemCnt="4">'
-        + "".join(_para_property(index) for index in range(4))
+        '<hh:paraProperties itemCnt="5">'
+        + "".join(
+            _para_property(index, align)
+            for index, align in enumerate(("JUSTIFY", "CENTER", "LEFT", "LEFT", "CENTER"))
+        )
         + "</hh:paraProperties>"
         '<hh:styles itemCnt="1"><hh:style id="0" type="PARA" name="바탕글" engName="Normal" '
         'paraPrIDRef="0" charPrIDRef="0" nextStyleIDRef="0"/></hh:styles>'
-        '<hh:borderFills itemCnt="2">'
+        '<hh:borderFills itemCnt="3">'
         '<hh:borderFill id="0" threeD="0" shadow="0"/>'
         '<hh:borderFill id="1" threeD="0" shadow="0">'
         '<hh:leftBorder type="SOLID" width="0.12 mm" color="#000000"/>'
@@ -147,22 +179,28 @@ def _header_xml() -> str:
         '<hh:topBorder type="SOLID" width="0.12 mm" color="#000000"/>'
         '<hh:bottomBorder type="SOLID" width="0.12 mm" color="#000000"/>'
         "</hh:borderFill>"
+        '<hh:borderFill id="2" threeD="0" shadow="0">'
+        '<hh:leftBorder type="SOLID" width="0.12 mm" color="#000000"/>'
+        '<hh:rightBorder type="SOLID" width="0.12 mm" color="#000000"/>'
+        '<hh:topBorder type="SOLID" width="0.12 mm" color="#000000"/>'
+        '<hh:bottomBorder type="SOLID" width="0.12 mm" color="#000000"/>'
+        f'<hh:fillBrush><hh:winBrush faceColor="{TABLE_HEADER_FILL}" hatchColor="{ACCENT_COLOR}" alpha="0"/></hh:fillBrush>'
+        "</hh:borderFill>"
         "</hh:borderFills>"
         "</hh:refList></hh:head>"
     )
 
 
-def _char_property(index: int, height: int, bold: int) -> str:
+def _char_property(index: int, height: int, bold: int, color: str = "#000000") -> str:
     bold_tag = "<hh:bold/>" if bold else ""
     return (
-        f'<hh:charPr id="{index}" height="{height}" textColor="#000000" shadeColor="none">'
+        f'<hh:charPr id="{index}" height="{height}" textColor="{color}" shadeColor="none">'
         f'<hh:fontRef hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>'
         f"{bold_tag}</hh:charPr>"
     )
 
 
-def _para_property(index: int) -> str:
-    align = "LEFT"
+def _para_property(index: int, align: str = "LEFT") -> str:
     return (
         f'<hh:paraPr id="{index}" tabPrIDRef="0" condense="0" fontLineHeight="0" '
         f'snapToGrid="1" suppressLineNumbers="0" checked="0">'

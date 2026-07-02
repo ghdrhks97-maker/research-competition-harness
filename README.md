@@ -42,7 +42,7 @@
 | `rch run-lanes <ws> <agent>` | lane별 프롬프트 번들 생성(외부 에이전트 배정용). `--execute` 시 로그인 확인 후 실제 호출 | `prompts/<agent>/` |
 | `rch agents preflight <ws>` | Codex/Antigravity/Claude CLI 설치·로그인 자동 확인 | `output/agent-preflight.{json,md}` |
 | `rch agents run <ws> <agent> --lanes ...` | 프롬프트를 에이전트 CLI로 실제 호출해 응답 수집 | `lanes/<lane>/<agent>/agent-response.md` |
-| `rch build-hwpx <ws>` | 조립된 bundle → HWPX(OWPML zip) 렌더 | `output/report.hwpx` |
+| `rch build-hwpx <ws>` | 조립된 bundle → HWPX 렌더. `--engine kordoc`으로 한국형 보고서 프리셋 렌더(Node 18+) | `output/report.hwpx` |
 | `rch render-check <ws>` | HWPX 구조·XML·페이지 추정·목차-본문 일치·표 무결성 검증 | `output/render-check.{json,md}` |
 | `rch revise-loop <ws>` | critic·check·render-check 피드백을 우선순위 수정 백로그로 통합 | `output/revision-tasks.{json,md}` |
 
@@ -120,6 +120,8 @@ pip install -e ".[mcp]"     # rch + rch-mcp(MCP 서버) 설치
 
 그러면 하네스가 가재코드처럼 **대화형 인터뷰(`deep-interview`)** 로 이어집니다 — **한 번에 하나씩 승인창(질문 UI)** 을 띄워:
 참가 연구대회 → 대상 학급/학생 → 전공 교과 → 연구 주제(없으면 에이전트가 **후보 3~4개 제안** → 선택) → 제목 후보 선택 → 역량·도구·제약 → 보유 자료. 확정 사항을 요약해 **계획 승인**을 받은 뒤에야 본문 생성을 시작합니다.
+
+제목·수업 모형은 **1등급 수상작 작명 공식**으로 짓습니다: ① 독창적 영문 약어 프로젝트명(각 글자=수업 단계, 예: L.E.A.P., W.A.R.M., SPIN) ② 감성 캐치프레이즈·언어유희(예: 내.일.을 잡아, 어_깨_동_무) ③ 방법론(PBL·SEL)+목표 역량(심미적 감성·소통) 명시 — 후보는 약어형 3개+언어유희형 2개(상세: `.claude/agents/brainstorm.md`).
 
 이미 정보가 있으면 한 줄로 넣어도 됩니다(인터뷰는 빠진 부분만 물어봄):
 
@@ -286,6 +288,16 @@ CLI마다 하위 명령이 달라 각 에이전트의 실행 명령을 환경변
 - 자유응답 인용의 학생 동의·익명화 확정
 
 `build-hwpx`는 구조적으로 유효한 OWPML 컨테이너를 만들지만, 구조 통과가 Hancom 실제 표시를 보장하지는 않습니다. 렌더 품질의 최종 판정은 사람이 Hancom에서 확인합니다.
+
+### 렌더 엔진 우선순위 (수상작 외형에 가깝게)
+
+빌트인 렌더러는 구조 보장용입니다(제목 색·크기, 표 헤더 음영, 양쪽 정렬 정도의 기본 스타일). 1등급 수상작 같은 외형이 필요하면 finalizer가 순서대로 시도합니다:
+
+1. **대회 공식 양식 채우기** — `input/rules/forms/*.hwpx`가 있고 [kordoc](https://github.com/chrisryugj/kordoc)이 설치돼 있으면 `npx -y kordoc fill 양식.hwpx -j values.json -o output/report.hwpx` (원본 서식 100% 유지)
+2. **kordoc 보고서 프리셋** — `rch build-hwpx <ws> --engine kordoc` (내부에서 `npx -y kordoc generate ... --preset 보고서` 실행, `RCH_KORDOC_CMD`로 명령 조정)
+3. **빌트인** — `rch build-hwpx <ws>` (의존성 없음, 항상 유효한 HWPX)
+
+어느 경로든 `rch render-check`로 검증하고, 표지·색 박스·아이콘 같은 최종 꾸밈은 한컴에서 사람이 마무리합니다.
 
 XLSX 분석에는 `openpyxl`이 필요합니다(`pip install .[xlsx]`). CSV/TSV는 추가 의존성 없이 동작합니다.
 

@@ -3,7 +3,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import shlex
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -678,15 +681,19 @@ def run_lanes_cmd(workspace: Path, agent: str, lanes: list[str] | None, execute:
     return exit_code
 
 
-def build_hwpx_cmd(workspace: Path, output_path: Path | None) -> None:
+def build_hwpx_cmd(workspace: Path, output_path: Path | None, engine: str = "builtin") -> None:
     output_dir = workspace / "output"
     bundle_paths = [output_dir / name for name in FINAL_BUNDLE_FILES if name != "finalization-checklist.md"]
     existing = [path for path in bundle_paths if path.exists()]
     if not existing:
         raise SystemExit("no assembled bundle found; run `rch assemble` first")
     target = output_path or (output_dir / "report.hwpx")
+    if engine == "kordoc":
+        _build_hwpx_kordoc(workspace, existing, target)
+        return
     result = hwpx_mod.build_hwpx_from_bundle(existing, target, images_root=workspace)
     summary = {
+        "engine": "builtin",
         "hwpx": target.relative_to(workspace).as_posix() if target.is_relative_to(workspace) else str(target),
         "paragraphs": result.paragraph_count,
         "tables": result.table_count,
@@ -696,6 +703,50 @@ def build_hwpx_cmd(workspace: Path, output_path: Path | None) -> None:
         "missing_images": result.missing_images,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
+def _build_hwpx_kordoc(workspace: Path, bundle_paths: list[Path], target: Path) -> None:
+    """Render via the kordoc open-source converter (https://github.com/chrisryugj/kordoc).
+
+    kordoc's markdown→HWPX path ships Korean report presets and renders
+    much closer to Hancom's native look than the builtin structural
+    renderer. Requires Node 18+; command overridable with RCH_KORDOC_CMD
+    (default: `npx -y kordoc`)."""
+    merged = workspace / "output" / "report-merged.md"
+    merged.write_text(
+        "\n\n".join(path.read_text(encoding="utf-8", errors="replace") for path in bundle_paths),
+        encoding="utf-8",
+    )
+    base_cmd = shlex.split(os.environ.get("RCH_KORDOC_CMD", "npx -y kordoc"))
+    cmd = [*base_cmd, "generate", str(merged), "-o", str(target), "--preset", "보고서"]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)
+    except FileNotFoundError:
+        raise SystemExit(
+            f"kordoc 실행 실패: {base_cmd[0]} 없음. Node 18+ 설치 후 재시도하거나 "
+            "`rch build-hwpx --engine builtin`으로 폴백하세요."
+        ) from None
+    except subprocess.TimeoutExpired:
+        raise SystemExit("kordoc 실행 시간 초과. `--engine builtin`으로 폴백하세요.") from None
+    if proc.returncode != 0 or not target.exists():
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        raise SystemExit(
+            "kordoc 렌더 실패 (exit={code}): {msg}\n`rch build-hwpx --engine builtin`으로 폴백하세요.".format(
+                code=proc.returncode, msg=detail[0] if detail else "원인 미상"
+            )
+        )
+    print(
+        json.dumps(
+            {
+                "engine": "kordoc",
+                "hwpx": target.relative_to(workspace).as_posix() if target.is_relative_to(workspace) else str(target),
+                "merged_markdown": merged.relative_to(workspace).as_posix(),
+                "note": "rch render-check로 구조 검증 후 한컴에서 확인하세요.",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def render_check_cmd(workspace: Path, hwpx_path: Path | None, page_limit: int) -> int:
@@ -1168,6 +1219,12 @@ def main(argv: list[str] | None = None) -> int:
     hwpx_p = sub.add_parser("build-hwpx", help="build a .hwpx from the assembled bundle")
     hwpx_p.add_argument("workspace")
     hwpx_p.add_argument("--output", help="output .hwpx path")
+    hwpx_p.add_argument(
+        "--engine",
+        choices=("builtin", "kordoc"),
+        default="builtin",
+        help="렌더 엔진: builtin(결정적 구조 렌더러) 또는 kordoc(오픈소스 한국형 보고서 프리셋, Node 18+ 필요)",
+    )
 
     render_p = sub.add_parser("render-check", help="validate a built .hwpx structure")
     render_p.add_argument("workspace")
@@ -1271,7 +1328,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "run-lanes":
         return run_lanes_cmd(Path(args.workspace), args.agent, args.lanes, args.execute)
     if args.cmd == "build-hwpx":
-        build_hwpx_cmd(Path(args.workspace), Path(args.output) if args.output else None)
+        build_hwpx_cmd(Path(args.workspace), Path(args.output) if args.output else None, engine=args.engine)
         return 0
     if args.cmd == "render-check":
         return render_check_cmd(

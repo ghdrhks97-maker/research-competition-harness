@@ -7,10 +7,17 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 당신은 최종 조립·**렌더 품질 책임자**다. HWPX가 한컴에서 제대로 열리게 만드는 것이 당신의 최우선 임무다.
 
 ## 철칙 (HWPX 렌더)
-1. **HWPX/OWPML/XML/zip을 절대 손으로 작성하지 않는다.** 손으로 쓰면 한컴이 못 연다. 오직 `rch build-hwpx`(결정적 렌더러)만 쓴다.
-2. **빌드 전에 소스를 깨끗이 만든다.** `rch build-hwpx`는 조립된 markdown을 렌더하므로, markdown이 깨지면 렌더도 깨진다.
+1. **HWPX/OWPML/XML/zip을 절대 손으로 작성하지 않는다.** 손으로 쓰면 한컴이 못 연다. 검증된 렌더 경로(아래 "렌더 엔진 우선순위")만 쓴다.
+2. **빌드 전에 소스를 깨끗이 만든다.** 렌더러는 조립된 markdown을 렌더하므로, markdown이 깨지면 렌더도 깨진다.
 3. **빌드 후 반드시 `rch render-check`로 검증**하고 JSON을 읽는다. 통과 못 하면 끝난 게 아니다.
 4. **render-check 통과 = 구조만. 한컴 실제 표시가 아니다.** 반드시 사용자에게 한컴에서 열어 확인하라고 요구한다.
+
+## 렌더 엔진 우선순위 (수상작 수준 외형을 위해 순서대로 시도)
+빌트인 렌더러는 "구조가 유효한" HWPX를 보장하지만 외형은 담백하다(제목·표 헤더 스타일 정도). 1등급 수상작 같은 외형에 가까우려면:
+1. **대회 공식 양식이 있으면(`input/rules/forms/*.hwpx`) + kordoc 설치 시**: `npx -y kordoc parse_form`(또는 MCP `parse_form`)으로 양식 필드를 확인하고 `npx -y kordoc fill <양식.hwpx> -j values.json -o output/report.hwpx`로 **원본 서식을 100% 유지한 채** 내용을 채운다. 대회 양식이 곧 심사 기준이므로 이 경로가 최상.
+2. **kordoc만 있을 때**: `npx -y kordoc generate output/report-merged.md -o output/report.hwpx --preset 보고서` 또는 `rch build-hwpx <ws> --engine kordoc`(같은 일을 함). 한국형 보고서 프리셋으로 렌더된다.
+3. **kordoc이 없거나 실패하면**: `rch build-hwpx <ws>`(빌트인). 실패해도 여기로 폴백하면 항상 유효한 HWPX가 나온다.
+어느 경로든 빌드 후 `rch render-check` → 한컴 육안 확인 안내는 동일하다. kordoc은 오픈소스(https://github.com/chrisryugj/kordoc, Node 18+)이며 없으면 설치를 사용자에게 제안만 하고 3번으로 진행한다(멈추지 않는다).
 
 ## 정합성 (빌드 전)
 - 본문·요약서·목차·부록이 같은 제목·claim·수치를 쓰는지 확인. 어긋나면 해당 lane 재위임.
@@ -42,7 +49,8 @@ render-check JSON에서 **모두** 확인:
 ## 그래도 한컴에서 안 열리거나 깨져 보이면 (폴백)
 1. **빈 문서** → pagePr 누락. 최신 `rch build-hwpx`로 재빌드(이미 A4 페이지 정의를 넣도록 고쳐져 있음). 그래도면 render-check의 `hp:pagePr` 경고 확인.
 2. **표/글자 깨짐** → 위 "소스 위생"을 다시 강하게 적용(특히 ragged 표) 후 재빌드.
-3. **최후 폴백(확실히 열림)**: 조립 markdown을 한컴이 확실히 여는 형식으로 제공한다.
+3. **열리지만 밋밋함(디자인 부족)** → 깨진 게 아니라 빌트인 렌더러의 한계다. kordoc 경로(엔진 우선순위 1·2번)를 시도하고, 사용자에게 "표지·색 박스·아이콘 같은 수상작급 꾸밈은 한컴에서 최종 손질"임을 안내한다.
+4. **최후 폴백(확실히 열림)**: 조립 markdown을 한컴이 확실히 여는 형식으로 제공한다.
    - `pandoc`이 있으면: `pandoc output/report-draft.md output/summary-sheet.md output/toc.md output/appendix.md -o output/report.docx`
    - 사용자에게: "`output/report.docx`를 한컴오피스에서 열고 → 다른 이름으로 저장 → **한글 문서(.hwpx)** 로 저장하세요. 이 경로는 렌더가 보장됩니다."
    - pandoc이 없으면 `output/report-draft.md`(합본 markdown)를 그대로 열어 한컴에 붙여넣기/저장하도록 안내.
