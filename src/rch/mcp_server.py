@@ -240,9 +240,14 @@ def build_server() -> Any:
         ) from exc
 
     app = FastMCP("rch", instructions=(
-        "한국 연구대회 보고서 제작 하네스. 빠른 시작은 go. 순서: init → brainstorm → "
-        "research_background/import_survey/import_photos/mine_references → draft → assemble → check(final) → "
-        "build_hwpx → render_check → revise_loop. 증거 없는 수치·학생 발화·사진은 금지."
+        "한국 연구대회 보고서 제작 하네스(에이전트 우선). 판단·리서치·집필·비평은 전부 "
+        "당신(에이전트)이 AGENTS.md의 역할 정의대로 직접 수행하고, 이 서버의 도구는 결정적 작업에만 쓴다: "
+        "init(골격)·import_rules(양식 저장)·import_survey(설문 통계)·next(다음 작업 판정 루프)·"
+        "check(검증 게이트)·assemble(조립)·build_hwpx(렌더)·render_check(렌더 검증)·revise_loop(수정 백로그)·"
+        "diagnose(산출물 검진). 흐름: deep-interview(대화) → 계획 승인 → next를 반복 호출해 done까지. "
+        "경고: go/brainstorm/draft/mine_references/research_background/import_photos는 레거시 파이썬 "
+        "콘텐츠 생성기라서 placeholder 골격만 나온다 — 절대 호출하지 말 것(내용은 당신이 직접 쓴다). "
+        "증거 없는 수치·학생 발화·사진 금지, 예상값은 '예상값(가상)' 라벨+expected."
     ))
 
     @app.tool()
@@ -262,10 +267,22 @@ def build_server() -> Any:
         survey_items: int = 5,
         photo_count: int = 4,
         build_hwpx: bool = True,
+        skeleton: bool = False,
     ) -> dict[str, Any]:
         """[레거시 — 완성 보고서용 아님] placeholder 표 중심의 스켈레톤을 빠르게 만든다.
-        완성 보고서는 이 도구가 아니라 에이전트 autopilot(deep-interview → 계획 승인 → next 루프,
-        AGENTS.md 참고)으로 만들어야 한다. 에이전트는 이 도구를 호출하지 말 것."""
+        skeleton=True를 명시하지 않으면 실행을 거부한다. 완성 보고서는 이 도구가 아니라
+        에이전트 autopilot(deep-interview → 계획 승인 → next 루프, AGENTS.md 참고)으로
+        만들어야 한다. 에이전트는 이 도구를 호출하지 말 것."""
+        if not skeleton:
+            return {
+                "ok": False,
+                "refused": True,
+                "reason": (
+                    "go는 레거시 스켈레톤 생성기입니다(placeholder 골격, 완성 보고서 아님). "
+                    "완성 보고서는 deep-interview → 계획 승인 → next 루프(autopilot)로 만드세요. "
+                    "골격이 정말 필요하면 사용자 확인 후 skeleton=true로 다시 호출하세요."
+                ),
+            }
         return op_go(
             workspace,
             competition_name=competition_name,
@@ -301,7 +318,8 @@ def build_server() -> Any:
         competency: str = "",
         constraints: str = "",
     ) -> dict[str, Any]:
-        """인터뷰 답(대회명·전공·학년·상황·관심·도구·목표역량·제약)을 받아 트렌드 리서치·연구 주제·제목을 만들어 input/ideas에 쓴다. 주제·제목은 2022 개정 핵심역량과 반드시 연계된다."""
+        """[레거시 — 호출 금지] 파이썬 템플릿으로 주제·제목을 만든다(품질 낮음). 주제·제목은
+        에이전트가 deep-interview + brainstorm 역할(1등급 작명 공식)로 직접 만들어 input/ideas에 쓴다."""
         return op_brainstorm(
             workspace, major, competition_name=competition_name, level=level, class_context=class_context, interests=interests,
             tools=tools, competency=competency, constraints=constraints,
@@ -319,12 +337,14 @@ def build_server() -> Any:
 
     @app.tool()
     def import_photos(workspace: str) -> dict[str, Any]:
-        """input/photos 사진의 개인정보 점검표와 배치 매니페스트를 만든다."""
+        """[레거시 — 호출 금지] 파일명 휴리스틱 점검표만 만든다. 사진 개인정보 판정은
+        photo-curator 역할이 실제 픽셀을 보고 직접 수행한다."""
         return op_import_photos(workspace)
 
     @app.tool()
     def mine_references(workspace: str) -> dict[str, Any]:
-        """레퍼런스 보고서에서 목차·표 밀도·부록 패턴 등 구조만 추출한다."""
+        """[레거시 — 호출 금지] 제목 개수 휴리스틱 추출(부정확). 레퍼런스 구조 분석은
+        reference-miner 역할이 원본을 직접 읽고 수행한다."""
         return op_mine_references(workspace)
 
     @app.tool()
@@ -334,12 +354,14 @@ def build_server() -> Any:
         max_results: int = 8,
         offline: bool = False,
     ) -> dict[str, Any]:
-        """공개 route scheduler로 이론적 배경·선행연구 후보를 수집한다."""
+        """[레거시 — 호출 금지] 기계 질의라 무관한 소스가 섞인다. 배경·선행연구는
+        background-researcher 역할이 insane-search v2(4트랙 질의 매트릭스)로 직접 조사한다."""
         return op_research_background(workspace, query=query, max_results=max_results, offline=offline)
 
     @app.tool()
     def draft(workspace: str) -> dict[str, Any]:
-        """분석 결과로 I~V장 본문·요약서·목차·부록 초안을 생성한다."""
+        """[레거시 — 호출 금지] 대괄호 placeholder 골격만 만든다("[…확정한다.]" 문단).
+        본문은 draft-writer 역할이 규정 분량을 채워 직접 집필한다."""
         return op_draft(workspace)
 
     @app.tool()

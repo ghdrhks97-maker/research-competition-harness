@@ -171,6 +171,24 @@ class DiagnoseTests(unittest.TestCase):
             self.assertTrue(any("rch go" in s for s in report["signals"]), report["signals"])
             self.assertTrue((output / "diagnose.md").exists())
 
+    def test_diagnose_flags_python_skeleton_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            output = workspace / "output"
+            output.mkdir(parents=True)
+            (output / "report-draft.md").write_text(
+                "# 제목\n\n[I. 연구의 필요성 및 목적의 서술은 lane 산출물과 증거로 확정한다.]\n",
+                encoding="utf-8",
+            )
+            build_hwpx("# 제목\n\n본문\n", output / "report.hwpx", images_root=workspace)
+
+            code = main(["diagnose", str(workspace)])
+            self.assertEqual(code, 0)
+            import json
+
+            report = json.loads((output / "diagnose.json").read_text(encoding="utf-8"))
+            self.assertTrue(any("harness-draft" in s for s in report["signals"]), report["signals"])
+
     def test_diagnose_flags_missing_hwpx(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
