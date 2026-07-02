@@ -149,12 +149,22 @@ def op_next(workspace: str) -> dict[str, Any]:
     return plan.to_dict()
 
 
-def op_build_hwpx(workspace: str, output: str | None = None) -> dict[str, Any]:
+def op_build_hwpx(workspace: str, output: str | None = None, force: bool = False) -> dict[str, Any]:
+    from rch.cli import _build_quality_gate  # shared pre-build gate
+
     path = _ws(workspace)
     output_dir = path / "output"
     bundle = [output_dir / name for name in _RENDER_BUNDLE if (output_dir / name).exists()]
     if not bundle:
         raise ValueError("no assembled bundle found; run assemble first")
+    findings = _build_quality_gate(bundle)
+    if findings and not force:
+        return {
+            "ok": False,
+            "refused": True,
+            "findings": findings,
+            "reason": "번들이 아직 완성 상태가 아닙니다. 해당 lane을 보강한 뒤 assemble → build_hwpx를 다시 호출하세요. (중간 확인용은 force=true)",
+        }
     target = Path(output).expanduser() if output else output_dir / "report.hwpx"
     result = hwpx_mod.build_hwpx_from_bundle(bundle, target, images_root=path)
     return {
@@ -376,9 +386,10 @@ def build_server() -> Any:
         return op_check(workspace, final=final, allow_expected=allow_expected)
 
     @app.tool()
-    def build_hwpx(workspace: str, output: str = "") -> dict[str, Any]:
-        """조립된 번들을 HWPX(OWPML) 파일로 렌더한다."""
-        return op_build_hwpx(workspace, output or None)
+    def build_hwpx(workspace: str, output: str = "", force: bool = False) -> dict[str, Any]:
+        """조립된 번들을 HWPX(OWPML) 파일로 렌더한다. 품질 게이트(미완성 마커·최소 분량)
+        실패 시 거부하며, 중간 확인용 강제 빌드만 force=true."""
+        return op_build_hwpx(workspace, output or None, force=force)
 
     @app.tool()
     def render_check(workspace: str, hwpx: str = "", page_limit: int = 25) -> dict[str, Any]:
