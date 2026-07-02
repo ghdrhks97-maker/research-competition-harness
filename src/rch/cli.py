@@ -27,6 +27,7 @@ from rch import revise as revise_mod
 from rch import rules as rules_mod
 from rch import run_lanes as run_lanes_mod
 from rch import survey as survey_mod
+from rch import visual_check as visual_check_mod
 from rch.lane_specs import FINAL_BUNDLE_FILES, LANE_SPECS, render_lane_input
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -755,10 +756,17 @@ def build_hwpx_cmd(
     if engine == "kordoc":
         _build_hwpx_kordoc(workspace, existing, target)
         return
-    result = hwpx_mod.build_hwpx_from_bundle(existing, target, images_root=workspace)
+    result = hwpx_mod.build_research_report_hwpx(
+        workspace,
+        target,
+        images_root=workspace,
+        preview=preview_build,
+    )
     summary = {
         "engine": "builtin",
         "hwpx": target.relative_to(workspace).as_posix() if target.is_relative_to(workspace) else str(target),
+        "sections": result.section_count,
+        "section_files": result.section_files,
         "paragraphs": result.paragraph_count,
         "tables": result.table_count,
         "headings": result.heading_count,
@@ -899,6 +907,11 @@ def diagnose_cmd(workspace: Path) -> int:
 
     # 4. HWPX inspection.
     hwpx_path = output_dir / "report.hwpx"
+    preview_path = output_dir / FORCE_PREVIEW_HWPX
+    if preview_path.exists() and not hwpx_path.exists():
+        signals.append(
+            f"output/{FORCE_PREVIEW_HWPX}만 있고 output/report.hwpx 없음 — final/build gate 실패 상태의 중간 확인본입니다."
+        )
     if not hwpx_path.exists():
         signals.append("output/report.hwpx 없음.")
     else:
@@ -926,6 +939,22 @@ def diagnose_cmd(workspace: Path) -> int:
         if estimated_pages and estimated_pages < 20:
             signals.append(
                 f"분량 과소: render-check 추정 {estimated_pages}쪽 — 연구대회 최종 보고서 수준이 아니라 요약 골격입니다."
+            )
+    if preview_path.exists():
+        toc_path = output_dir / "toc.md"
+        preview_check = render_check_mod.render_check(
+            preview_path,
+            toc_path=toc_path if toc_path.exists() else None,
+            min_pages=20,
+        )
+        info["preview_render_check"] = preview_check.to_dict()
+        if preview_check.section_count < 4:
+            signals.append(
+                f"preview HWPX 구획 부족({preview_check.section_count}개 section) — 표지·요약·목차·본문·부록 분리가 안 된 구버전 산출물입니다."
+            )
+        if preview_check.estimated_pages and preview_check.estimated_pages < 20:
+            signals.append(
+                f"preview 분량 과소: render-check 추정 {preview_check.estimated_pages}쪽 — 1등급 보고서급 분량 전 단계입니다."
             )
 
     if not signals:
@@ -997,6 +1026,20 @@ def render_check_cmd(workspace: Path, hwpx_path: Path | None, page_limit: int, m
     )
     print(json.dumps(check.to_dict(), ensure_ascii=False, indent=2))
     return 0 if check.ok else 1
+
+
+def visual_check_cmd(workspace: Path, hwpx_path: Path | None, renderer: str | None, required: bool) -> int:
+    output_dir = workspace / "output"
+    source = hwpx_path or output_dir / "report.hwpx"
+    if not source.exists() and (output_dir / FORCE_PREVIEW_HWPX).exists():
+        source = output_dir / FORCE_PREVIEW_HWPX
+    check = visual_check_mod.run_visual_check(source, output_dir, renderer=renderer)
+    print(json.dumps(check.to_dict(), ensure_ascii=False, indent=2))
+    if check.ok:
+        return 0
+    if check.skipped and not required:
+        return 0
+    return 1
 
 
 def revise_loop_cmd(workspace: Path) -> None:
@@ -1279,12 +1322,10 @@ def go_workspace(
 
     if build_hwpx:
         target = workspace / "output" / "report.hwpx"
-        hwpx_mod.build_hwpx_from_bundle(
-            [workspace / "output" / name for name in FINAL_BUNDLE_FILES if name != "finalization-checklist.md"],
-            target,
-            images_root=workspace,
-        )
+        build_result = hwpx_mod.build_research_report_hwpx(workspace, target, images_root=workspace, preview=False)
         summary["hwpx"] = str(target)
+        summary["hwpx_sections"] = build_result.section_count
+        summary["hwpx_section_files"] = build_result.section_files
         render = render_check_mod.run_render_check(
             target,
             workspace / "output",
@@ -1509,6 +1550,12 @@ def main(argv: list[str] | None = None) -> int:
         "--min-pages", type=int, default=0, help="본문 분량 하한(추정). 미만이면 경고(예: 22)"
     )
 
+    visual_p = sub.add_parser("visual-check", help="render HWPX to PDF/pages via RHWP/Hancom-compatible renderer")
+    visual_p.add_argument("workspace")
+    visual_p.add_argument("--hwpx", help="path to the .hwpx (default output/report.hwpx, fallback report-preview.hwpx)")
+    visual_p.add_argument("--renderer", help="renderer command. Supports {input}/{output}; default RCH_RHWP_RENDER or local rhwp helper")
+    visual_p.add_argument("--required", action="store_true", help="missing visual renderer is failure")
+
     revise_p = sub.add_parser("revise-loop", help="collect critic/check/render feedback into a backlog")
     revise_p.add_argument("workspace")
 
@@ -1657,6 +1704,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "render-check":
         return render_check_cmd(
             Path(args.workspace), Path(args.hwpx) if args.hwpx else None, args.page_limit, args.min_pages
+        )
+    if args.cmd == "visual-check":
+        return visual_check_cmd(
+            Path(args.workspace),
+            Path(args.hwpx) if args.hwpx else None,
+            args.renderer,
+            args.required,
         )
     if args.cmd == "revise-loop":
         revise_loop_cmd(Path(args.workspace))

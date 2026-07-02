@@ -285,12 +285,32 @@ class BuildGateTests(unittest.TestCase):
             code = main(["build-hwpx", str(workspace)])
             self.assertEqual(code, 0)
             self.assertTrue((workspace / "output" / "report.hwpx").exists())
+            check = render_check(workspace / "output" / "report.hwpx")
+            self.assertEqual(check.section_count, 5)
+            self.assertIn("Contents/section4.xml", check.section_files)
         with tempfile.TemporaryDirectory() as tmp:
             workspace = self._workspace_with_bundle(tmp, "# 제목\n\n짧은 본문\n")
             code = main(["build-hwpx", str(workspace), "--force"])
             self.assertEqual(code, 0)
             self.assertFalse((workspace / "output" / "report.hwpx").exists())
             self.assertTrue((workspace / "output" / "report-preview.hwpx").exists())
+            check = render_check(workspace / "output" / "report-preview.hwpx")
+            self.assertEqual(check.section_count, 5)
+
+    def test_visual_check_missing_renderer_is_optional(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = _workspace_with_final_bundle(tmp, _rich_body())
+            main(["build-hwpx", str(workspace)])
+            old = os.environ.get("RCH_RHWP_RENDER")
+            os.environ["RCH_RHWP_RENDER"] = ""
+            code = main(["visual-check", str(workspace), "--renderer", ""])
+            if old is None:
+                os.environ.pop("RCH_RHWP_RENDER", None)
+            else:
+                os.environ["RCH_RHWP_RENDER"] = old
+            self.assertEqual(code, 0)
+            report = json.loads((workspace / "output" / "visual-check.json").read_text(encoding="utf-8"))
+            self.assertTrue(report["skipped"])
 
 
 class KordocEngineTests(unittest.TestCase):

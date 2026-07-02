@@ -41,9 +41,12 @@ class RenderCheck:
     ok: bool = True
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    section_count: int = 0
+    section_files: list[str] = field(default_factory=list)
     heading_count: int = 0
     paragraph_count: int = 0
     table_count: int = 0
+    row_count: int = 0
     estimated_pages: int = 0
     page_limit: int = DEFAULT_PAGE_LIMIT
     min_pages: int = DEFAULT_MIN_PAGES
@@ -104,20 +107,35 @@ def _parse_toc_headings(toc_path: Path) -> list[str]:
     if not toc_path.exists():
         return []
     headings: list[str] = []
-    for line in toc_path.read_text(encoding="utf-8", errors="replace").split("\n"):
+    lines = toc_path.read_text(encoding="utf-8", errors="replace").split("\n")
+    has_table_toc = any(line.strip().startswith("|") for line in lines)
+    for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
+        if has_table_toc and not stripped.startswith("|"):
+            continue
+        if stripped.startswith("|"):
+            cells = [cell.strip(" `") for cell in stripped.strip("|").split("|")]
+            if len(cells) >= 2:
+                first_cell = cells[0].replace(" ", "")
+                if (first_cell and set(first_cell) <= {"-"}) or cells[0] in {"장/절", "구분"}:
+                    continue
+                stripped = cells[1] or cells[0]
+            else:
+                continue
         # Drop leading list markers and trailing dot-leaders / page numbers.
         stripped = re.sub(r"^[-*0-9.)\s]+", "", stripped)
         stripped = re.sub(r"[.\s]*\d+\s*$", "", stripped)
+        stripped = re.sub(r"\bplaceholder\b", "", stripped, flags=re.IGNORECASE)
         stripped = stripped.strip()
-        if stripped:
+        if stripped and stripped not in {"표지", "요약", "목차"}:
             headings.append(stripped)
     return headings
 
 
 def _norm(text: str) -> str:
+    text = re.sub(r"^\s*(?:[IVX]+|[0-9]+)[.)]?\s*", "", text, flags=re.IGNORECASE)
     return re.sub(r"\s+", "", text)
 
 
@@ -164,37 +182,59 @@ def render_check(
                 except ElementTree.ParseError as exc:
                     check.errors.append(f"malformed xml: {name}: {exc}")
 
-        if "Contents/section0.xml" in names:
+        section_names = _section_names(names)
+        check.section_files = section_names
+        check.section_count = len(section_names)
+        if not section_names:
+            check.errors.append("no Contents/section*.xml entries found")
+        if 0 < len(section_names) < 4:
+            check.warnings.append(
+                f"연구대회 보고서 구획 부족: section {len(section_names)}개. 표지·요약·목차·본문·부록 분리 권장."
+            )
+
+        all_text: list[str] = []
+        all_headings: list[str] = []
+        for section_name in section_names:
             try:
-                section_root = ElementTree.fromstring(archive.read("Contents/section0.xml"))
+                section_data = archive.read(section_name)
+                section_root = ElementTree.fromstring(section_data)
             except ElementTree.ParseError:
                 section_root = None
             # A section with no page definition (hp:pagePr) opens in Hancom
             # but renders blank — text has no page to lay out on.
-            if b"pagePr" not in archive.read("Contents/section0.xml"):
+            if b"pagePr" not in archive.read(section_name):
                 check.errors.append(
-                    "section0.xml에 페이지 정의(hp:pagePr)가 없어 Hancom에서 빈 문서로 보입니다. build-hwpx 재실행 필요."
+                    f"{section_name}에 페이지 정의(hp:pagePr)가 없어 Hancom에서 빈 문서로 보입니다. build-hwpx 재실행 필요."
                 )
             if section_root is not None:
                 paragraphs, tables = _count_elements(section_root)
                 body_text, headings, heading_count = _section_text_and_headings(section_root)
-                check.paragraph_count = paragraphs
-                check.table_count = tables
-                check.heading_count = heading_count
+                check.paragraph_count += paragraphs
+                check.table_count += tables
+                check.heading_count += heading_count
                 row_estimate = _estimate_table_rows(section_root)
-                check.estimated_pages = _estimate_pages(body_text, tables, row_estimate)
-                if check.estimated_pages > page_limit:
-                    check.warnings.append(
-                        f"추정 {check.estimated_pages}쪽이 제한 {page_limit}쪽을 초과(추정치). "
-                        "table-layout 압축 검토 필요."
-                    )
-                if min_pages and check.estimated_pages < min_pages:
-                    check.warnings.append(
-                        f"추정 {check.estimated_pages}쪽이 목표 하한 {min_pages}쪽 미만(추정치). "
-                        "본문 밀도 부족 — draft-writer 보강 필요(장별 분량 예산 참고)."
-                    )
+                check.row_count += row_estimate
+                all_text.append(body_text)
+                all_headings.extend(headings)
                 _check_table_integrity(section_root, check)
-                _check_toc(headings, toc_path, check)
+
+        body_text = "\n".join(all_text)
+        check.estimated_pages = _estimate_pages(body_text, check.table_count, check.row_count)
+        if check.estimated_pages > page_limit:
+            check.warnings.append(
+                f"추정 {check.estimated_pages}쪽이 제한 {page_limit}쪽을 초과(추정치). "
+                "table-layout 압축 검토 필요."
+            )
+        if min_pages and check.estimated_pages < min_pages:
+            check.warnings.append(
+                f"추정 {check.estimated_pages}쪽이 목표 하한 {min_pages}쪽 미만(추정치). "
+                "본문 밀도 부족 — draft-writer 보강 필요(장별 분량 예산 참고)."
+            )
+        if check.table_count >= 12 and check.estimated_pages < 12:
+            check.warnings.append(
+                f"표 {check.table_count}개 대비 추정 {check.estimated_pages}쪽 — 표 중심 골격일 가능성. 표 밖 해설 문단 보강 필요."
+            )
+        _check_toc(all_headings, toc_path, check)
 
     check.ok = not check.errors
     return check
@@ -206,6 +246,15 @@ def _estimate_table_rows(root: ElementTree.Element) -> int:
         if _localname(element.tag) == "tr":
             rows += 1
     return rows
+
+
+def _section_names(names: list[str]) -> list[str]:
+    section_names = [name for name in names if re.fullmatch(r"Contents/section\d+\.xml", name)]
+    def key(name: str) -> int:
+        match = re.search(r"section(\d+)", name)
+        return int(match.group(1)) if match else 0
+
+    return sorted(section_names, key=key)
 
 
 def _check_table_integrity(root: ElementTree.Element, check: RenderCheck) -> None:
@@ -220,6 +269,9 @@ def _check_table_integrity(root: ElementTree.Element, check: RenderCheck) -> Non
             check.warnings.append(f"표 {index + 1} 행마다 열 수가 다름: {sorted(widths)}")
         if declared_cols and widths and int(declared_cols) not in widths:
             check.warnings.append(f"표 {index + 1} colCnt({declared_cols})와 실제 열 수 불일치")
+        declared_rows = table.get("rowCnt")
+        if declared_rows and int(declared_rows) != len(rows):
+            check.errors.append(f"표 {index + 1} rowCnt({declared_rows})와 실제 행 수({len(rows)}) 불일치")
 
 
 def _check_toc(headings: list[str], toc_path: Path | None, check: RenderCheck) -> None:
@@ -246,9 +298,11 @@ def render_report_markdown(check: RenderCheck) -> str:
         "",
         f"- 대상: `{check.hwpx_path}`",
         f"- 구조 판정: {status}",
+        f"- section 수: {check.section_count}",
         f"- 제목 수: {check.heading_count}",
         f"- 문단 수: {check.paragraph_count}",
         f"- 표 수: {check.table_count}",
+        f"- 표 행 수: {check.row_count}",
         f"- 추정 페이지: {check.estimated_pages} / 제한 {check.page_limit} (추정치)",
         f"- 목차-본문 일치: {'예' if check.toc_headings_matched else '아니오'}",
         "",

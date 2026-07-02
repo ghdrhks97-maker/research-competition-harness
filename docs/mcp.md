@@ -29,8 +29,9 @@ pip install -e ".[mcp]"     # mcp 패키지 포함 설치
 | `draft(workspace)` | I~V장 본문·요약·목차·부록 초안 |
 | `assemble(workspace)` | 번들 조립 |
 | `check(workspace, final?, allow_expected?)` | 계약·증거·금지어 검증. `allow_expected`는 라벨링된 예상값(`expected`) 주장을 final에서 허용 |
-| `build_hwpx(workspace, output?, force?)` | final gate와 품질 gate 통과 bundle만 HWPX 렌더. `force=true` 중간 확인본은 final 파일명 대신 preview 파일로 저장 |
-| `render_check(workspace, hwpx?, page_limit?)` | HWPX 구조·페이지 검증 |
+| `build_hwpx(workspace, output?, force?)` | final gate와 품질 gate 통과 bundle만 5-section HWPX로 렌더. `force=true` 중간 확인본은 final 파일명 대신 preview 파일로 저장 |
+| `render_check(workspace, hwpx?, page_limit?)` | 전체 section XML·페이지·목차·표 무결성 검증 |
+| `visual_check(workspace, hwpx?, renderer?)` | RHWP/Hancom 호환 렌더러로 PDF/page evidence와 coverage metrics 생성 |
 | `revise_loop(workspace)` | 피드백 백로그 통합 |
 | `next(workspace)` | autopilot: 다음 작업(위임/명령)을 결정적으로 판정. `needs_user`가 비면 actions 실행 후 재호출, `done=true`까지 반복 |
 
@@ -94,7 +95,7 @@ command = "rch-mcp"
 
 > "`2026-대회` 작업공간 만들고, 참가 대회는 과학전람회, 전공은 과학, 관심은 AI·탐구로 브레인스토밍해줘. 첨부한 양식 파일은 `import_rules`로 저장하고, 배경지식과 선행연구도 리서치하고, 그다음 `~/survey.csv` 설문 분석하고 초안까지 만들어줘."
 
-에이전트가 순서대로 `init/import_rules → agent_harness → next 루프 → assemble/check/build_hwpx/render_check`를 도구로 호출합니다. 리서치·사진 판정·본문 집필은 AGENTS.md 역할 정의대로 에이전트가 직접 수행합니다.
+에이전트가 순서대로 `init/import_rules → agent_harness → next 루프 → assemble/check/build_hwpx/render_check/visual_check`를 도구로 호출합니다. 리서치·사진 판정·본문 집필은 AGENTS.md 역할 정의대로 에이전트가 직접 수행합니다.
 
 `go`는 레거시 skeleton 생성기입니다. `skeleton=true` 없이는 거부되며, 완성 보고서에는 쓰지 않습니다.
 

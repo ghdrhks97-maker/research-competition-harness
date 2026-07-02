@@ -7,6 +7,7 @@ from pathlib import Path
 
 from rch.cli import assemble_workspace, bootstrap_lanes, check_workspace, create_lane, init_workspace, main
 from rch.lane_specs import LANE_SPECS
+from rch.render_check import render_check
 
 
 class CliTests(unittest.TestCase):
@@ -466,6 +467,8 @@ class CliTests(unittest.TestCase):
             )
             self.assertEqual(code, 0)
             self.assertTrue((workspace / "output" / "report.hwpx").exists())
+            rendered = render_check(workspace / "output" / "report.hwpx")
+            self.assertEqual(rendered.section_count, 5)
             self.assertTrue((workspace / "output" / "missing-inputs.md").exists())
             self.assertTrue((workspace / "input" / "rules" / "forms" / "2026_보고서_양식.hwpx").exists())
             report = (workspace / "output" / "report-draft.md").read_text(encoding="utf-8")

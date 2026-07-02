@@ -58,10 +58,10 @@
 - 예상값(가상) 포함 완성본: `rch check <ws> --final --allow-expected` — 라벨링된 `expected` claim만 허용되고, 교체 목록이 `output/expected-claims.md`에 남는다. 라벨 없는 `expected`와 `placeholder`는 여전히 차단된다.
 
 ### Phase 5 — 조립·렌더
-**`finalizer`** 지휘로 `rch assemble` → final 게이트(위 두 모드 중 해당하는 것, 통과 필수) → 렌더(엔진 우선순위: 대회 양식 kordoc fill → kordoc 프리셋 → `rch build-hwpx`) → `rch render-check`.
+**`finalizer`** 지휘로 `rch assemble` → final 게이트(위 두 모드 중 해당하는 것, 통과 필수) → 렌더(엔진 우선순위: 대회 양식 kordoc fill → kordoc 프리셋 → `rch build-hwpx`) → `rch render-check --page-limit <상한> --min-pages <하한>` → 가능하면 `rch visual-check`.
 
 ### Phase 6 — 디자인 마무리 (hwpx-designer)
-구조 검증을 통과한 `report.hwpx`를 **`hwpx-designer`** 가 마무리한다: `rch hwpx-unpack` → XML 편집(표지·아이콘 PNG 배치·카드형 요약) → `rch hwpx-pack`(자동 render-check). 반복본은 `output/iterations/report_v<NN>.hwpx`. 완료 시 최종본과 남은 확인사항 제시(예상값 포함이면 `output/expected-claims.md` 교체 목록 안내), "한컴에서 최종 확인" 안내.
+구조 검증을 통과한 `report.hwpx`를 **`hwpx-designer`** 가 마무리한다: `rch hwpx-unpack` → XML 편집(표지·아이콘 PNG 배치·카드형 요약) → `rch hwpx-pack`(자동 render-check) → 가능하면 `rch visual-check`. 반복본은 `output/iterations/report_v<NN>.hwpx`. 완료 시 최종본과 남은 확인사항 제시(예상값 포함이면 `output/expected-claims.md` 교체 목록 안내), "한컴에서 최종 확인" 안내.
 
 ## 원패스 원칙 (반복 최소화)
 디자인을 뒤로 미루지 않는다 — **집필 단계에서 이미 완성형에 가깝게** 쓴다: draft-writer·table-layout이 `:::box`·글리프·icon-artist의 아이콘 규칙을 본문에 직접 넣고, 장 제목(H1)은 렌더러가 자동으로 도비라 바로 만든다. 분량도 draft 단계에서 규정 상한까지 채운다(`render-check --min-pages`로 검사). 그래서 Phase 6의 hwpx-designer는 긴 반복이 아니라 **표지·아이콘 배치 등 1~3회 마무리 폴리시**가 기본이다(문제가 있을 때만 추가 반복).
@@ -102,7 +102,7 @@
 - `unreviewed`/`high` 위험 사진은 본문·부록에 넣지 않는다. 사진이 없으면 "사진첨부필요" 자리표시로 진행한다.
 - 레퍼런스·웹 문장을 복사하지 않는다(구조·근거 후보만). 존재하지 않는 논문·저자·DOI를 만들지 않는다.
 - 최종 본문에 예정/추후/초안/미정/TODO 금지(단 "예상값(가상)" 라벨은 draft에서 허용).
-- HWPX 조립은 finalizer 한 번만. **zip을 손으로 만들지 않는다** — 최초 생성은 `rch build-hwpx`(또는 kordoc), 이후 디자인 편집은 `hwpx-designer`가 `rch hwpx-unpack`→XML 편집→`rch hwpx-pack`(자동 검증) 루프 안에서만 한다. pack의 render-check 실패 = 그 편집 폐기. 구조 통과 ≠ Hancom 실제 표시(사람이 한컴에서 확인). 렌더 품질은 finalizer·hwpx-designer가 강하게 책임진다.
+- HWPX 조립은 finalizer 한 번만. **zip을 손으로 만들지 않는다** — 최초 생성은 `rch build-hwpx`(또는 kordoc), 이후 디자인 편집은 `hwpx-designer`가 `rch hwpx-unpack`→XML 편집→`rch hwpx-pack`(자동 검증) 루프 안에서만 한다. builtin은 표지·요약·목차·본문·부록 5-section으로 만든다. render-check에서 `section_count < 4`, underfill, 표 과다, TOC mismatch가 나오면 소스 lane을 고친다. 구조 통과 ≠ Hancom 실제 표시(사람이 한컴에서 확인). 렌더 품질은 finalizer·hwpx-designer가 강하게 책임진다.
 
 ## 사용량
 

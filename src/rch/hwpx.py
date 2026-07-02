@@ -24,6 +24,8 @@ import shutil
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
+import json
+import re
 from xml.sax.saxutils import escape
 
 from rch.docmodel import Block, parse_markdown, strip_inline_markup
@@ -65,6 +67,8 @@ class BuildResult:
     table_count: int
     heading_count: int
     image_count: int
+    section_count: int = 1
+    section_files: list[str] = field(default_factory=list)
     embedded_images: list[str] = field(default_factory=list)
     missing_images: list[str] = field(default_factory=list)
 
@@ -206,7 +210,7 @@ def _blocks_to_section(blocks: list[Block], images_root: Path, result: BuildResu
             _maybe_embed_image(block.src, images_root, result)
         elif block.kind == "hr":
             body.append(_paragraph("────────"))
-    result.paragraph_count = len(body)
+    result.paragraph_count += len(body)
     return "".join(body)
 
 
@@ -218,10 +222,10 @@ def _maybe_embed_image(src: str, images_root: Path, result: BuildResult) -> None
         result.missing_images.append(src)
 
 
-def _header_xml() -> str:
+def _header_xml(section_count: int = 1) -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
-        f'<hh:head xmlns:hh="{HEAD_NS}" version="1.4" secCnt="1">'
+        f'<hh:head xmlns:hh="{HEAD_NS}" version="1.4" secCnt="{section_count}">'
         "<hh:refList>"
         '<hh:fontfaces itemCnt="7">'
         + "".join(
@@ -383,27 +387,43 @@ def _container_xml() -> str:
     )
 
 
-def _content_hpf() -> str:
-    return (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
-        '<hpf:package xmlns:hpf="http://www.hancom.co.kr/schema/2011/hpf" '
-        'xmlns:opf="http://www.idpf.org/2007/opf/" version="">'
-        "<opf:metadata><opf:title>연구대회 보고서</opf:title></opf:metadata>"
-        '<opf:manifest>'
-        '<opf:item id="header" href="Contents/header.xml" media-type="application/xml"/>'
-        '<opf:item id="section0" href="Contents/section0.xml" media-type="application/xml"/>'
-        "</opf:manifest>"
-        '<opf:spine><opf:itemref idref="section0" linear="yes"/></opf:spine>'
-        "</hpf:package>"
+def _content_hpf(section_files: list[str] | None = None) -> str:
+    section_files = section_files or ["Contents/section0.xml"]
+    manifest_items = [
+        '<opf:item id="header" href="Contents/header.xml" media-type="application/xml"/>',
+    ]
+    spine_items = []
+    for index, section_file in enumerate(section_files):
+        section_id = f"section{index}"
+        manifest_items.append(
+            f'<opf:item id="{section_id}" href="{section_file}" media-type="application/xml"/>'
+        )
+        spine_items.append(f'<opf:itemref idref="{section_id}" linear="yes"/>')
+    return "".join(
+        [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n',
+            '<hpf:package xmlns:hpf="http://www.hancom.co.kr/schema/2011/hpf" ',
+            'xmlns:opf="http://www.idpf.org/2007/opf/" version="">',
+            "<opf:metadata><opf:title>연구대회 보고서</opf:title></opf:metadata>",
+            "<opf:manifest>",
+            "".join(manifest_items),
+            "</opf:manifest>",
+            "<opf:spine>",
+            "".join(spine_items),
+            "</opf:spine>",
+            "</hpf:package>",
+        ]
     )
 
 
-def _manifest_xml(embedded_images: list[str]) -> str:
+def _manifest_xml(embedded_images: list[str], section_files: list[str] | None = None) -> str:
+    section_files = section_files or ["Contents/section0.xml"]
     entries = [
         '<odf:file-entry full-path="/" media-type="application/hwp+zip"/>',
         '<odf:file-entry full-path="Contents/header.xml" media-type="application/xml"/>',
-        '<odf:file-entry full-path="Contents/section0.xml" media-type="application/xml"/>',
     ]
+    for section_file in section_files:
+        entries.append(f'<odf:file-entry full-path="{section_file}" media-type="application/xml"/>')
     for index, _ in enumerate(embedded_images):
         entries.append(f'<odf:file-entry full-path="BinData/image{index}" media-type="image/*"/>')
     return (
@@ -431,17 +451,24 @@ def _prv_text(blocks: list[Block]) -> str:
     return "\n".join(lines)
 
 
-def build_hwpx(markdown_text: str, output_path: Path, images_root: Path) -> BuildResult:
-    blocks = parse_markdown(markdown_text)
-    result = BuildResult(
-        hwpx_path=output_path,
-        paragraph_count=0,
-        table_count=0,
-        heading_count=0,
-        image_count=0,
-    )
-    body = _blocks_to_section(blocks, images_root, result)
-    section = _section_xml(body)
+def _write_hwpx_package(
+    sections: list[tuple[str, str]],
+    output_path: Path,
+    images_root: Path,
+    result: BuildResult,
+) -> BuildResult:
+    section_files: list[str] = []
+    section_xmls: list[tuple[str, str]] = []
+    preview_blocks: list[Block] = []
+    for index, (_name, markdown_text) in enumerate(sections):
+        blocks = parse_markdown(markdown_text)
+        preview_blocks.extend(blocks)
+        body = _blocks_to_section(blocks, images_root, result)
+        section_file = f"Contents/section{index}.xml"
+        section_files.append(section_file)
+        section_xmls.append((section_file, _section_xml(body)))
+    result.section_count = len(section_files)
+    result.section_files = section_files
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_path.exists():
@@ -455,16 +482,28 @@ def build_hwpx(markdown_text: str, output_path: Path, images_root: Path) -> Buil
         archive.writestr("version.xml", _version_xml())
         archive.writestr("settings.xml", _settings_xml())
         archive.writestr("META-INF/container.xml", _container_xml())
-        archive.writestr("META-INF/manifest.xml", _manifest_xml(result.embedded_images))
-        archive.writestr("Contents/content.hpf", _content_hpf())
-        archive.writestr("Contents/header.xml", _header_xml())
-        archive.writestr("Contents/section0.xml", section)
-        archive.writestr("Preview/PrvText.txt", _prv_text(blocks))
+        archive.writestr("META-INF/manifest.xml", _manifest_xml(result.embedded_images, section_files))
+        archive.writestr("Contents/content.hpf", _content_hpf(section_files))
+        archive.writestr("Contents/header.xml", _header_xml(len(section_files)))
+        for section_file, section_xml in section_xmls:
+            archive.writestr(section_file, section_xml)
+        archive.writestr("Preview/PrvText.txt", _prv_text(preview_blocks))
         for index, src in enumerate(result.embedded_images):
             data = (images_root / src).read_bytes()
             archive.writestr(f"BinData/image{index}", data)
 
     return result
+
+
+def build_hwpx(markdown_text: str, output_path: Path, images_root: Path) -> BuildResult:
+    result = BuildResult(
+        hwpx_path=output_path,
+        paragraph_count=0,
+        table_count=0,
+        heading_count=0,
+        image_count=0,
+    )
+    return _write_hwpx_package([("body", markdown_text)], output_path, images_root, result)
 
 
 def build_hwpx_from_bundle(bundle_paths: list[Path], output_path: Path, images_root: Path) -> BuildResult:
@@ -473,3 +512,96 @@ def build_hwpx_from_bundle(bundle_paths: list[Path], output_path: Path, images_r
         if path.exists():
             parts.append(path.read_text(encoding="utf-8", errors="replace"))
     return build_hwpx("\n\n".join(parts), output_path, images_root)
+
+
+def _read_json_file(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _plain(text: str) -> str:
+    return re.sub(r"\s+", " ", strip_inline_markup(text)).strip()
+
+
+def _first_nonempty(*values: object) -> str:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _cover_markdown(workspace: Path, preview: bool = False) -> str:
+    profile = _read_json_file(workspace / "input" / "rules" / "competition-profile.json")
+    brainstorm = _read_json_file(workspace / "input" / "ideas" / "brainstorm.json")
+    title = _first_nonempty(
+        profile.get("recommended_title"),
+        brainstorm.get("recommended_title"),
+        profile.get("title"),
+        "연구대회 보고서",
+    )
+    competition = _first_nonempty(profile.get("competition_name"), profile.get("name"), "연구대회")
+    major = _first_nonempty(profile.get("major"), profile.get("subject"), "교과")
+    level = _first_nonempty(profile.get("level"), profile.get("class_context"))
+    lines = [
+        "# 연구대회 보고서",
+        "",
+        f"## {_plain(title)}",
+        "",
+        "| 항목 | 내용 |",
+        "|---|---|",
+        f"| 참가 대회 | {_plain(competition)} |",
+        f"| 교과/분야 | {_plain(major)} |",
+    ]
+    if level:
+        lines.append(f"| 대상 | {_plain(level)} |")
+    lines += [
+        "",
+        ":::box 표지 확인",
+        "대회 양식의 표지 서식이 있으면 최종 편집 단계에서 해당 양식 기준으로 재정렬한다.",
+        ":::",
+    ]
+    if preview:
+        lines += [
+            "",
+            ":::box 중간 확인본",
+            "이 파일은 final gate 또는 build gate를 통과하지 않은 preview입니다. 제출용 최종본이 아닙니다.",
+            ":::",
+        ]
+    return "\n".join(lines)
+
+
+def _read_part(path: Path, fallback_title: str) -> str:
+    if path.exists():
+        text = path.read_text(encoding="utf-8", errors="replace").strip()
+        if text:
+            return text
+    return f"# {fallback_title}\n\n자료 없음"
+
+
+def build_research_report_hwpx(
+    workspace: Path,
+    output_path: Path,
+    *,
+    images_root: Path | None = None,
+    preview: bool = False,
+) -> BuildResult:
+    images_root = images_root or workspace
+    output_dir = workspace / "output"
+    sections = [
+        ("cover", _cover_markdown(workspace, preview=preview)),
+        ("summary", _read_part(output_dir / "summary-sheet.md", "요약서")),
+        ("toc", _read_part(output_dir / "toc.md", "목차")),
+        ("body", _read_part(output_dir / "report-draft.md", "본문")),
+        ("appendix", _read_part(output_dir / "appendix.md", "부록")),
+    ]
+    result = BuildResult(
+        hwpx_path=output_path,
+        paragraph_count=0,
+        table_count=0,
+        heading_count=0,
+        image_count=0,
+    )
+    return _write_hwpx_package(sections, output_path, images_root, result)
