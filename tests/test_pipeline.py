@@ -129,6 +129,19 @@ class PipelineTests(unittest.TestCase):
             plan = compute_next(workspace)
             self.assertEqual(plan.phase, "phase4-critic")
 
+    def test_icon_visual_lane_delegates_to_icon_artist(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            init_workspace(workspace)
+            _approve_plan(workspace)
+            for lane in (*PHASE1_LANES, "draft-writer", "table-layout"):
+                _pass_lane(workspace, lane)
+
+            plan = compute_next(workspace)
+            self.assertEqual(plan.phase, "phase3-companions")
+            roles = {a["lane"]: a["role"] for a in plan.actions}
+            self.assertEqual(roles.get("icon-visual"), "icon-artist")
+
     def test_finalize_then_done(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"

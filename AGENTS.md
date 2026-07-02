@@ -48,7 +48,7 @@
 **`draft-writer`** 가 Phase 1 산출물을 모두 읽고 I~V장 본문을 집필(표 중심·최종 진술형). 설문 수치는 `input/surveys/analysis/`에서만 인용.
 
 ### Phase 3 — 편집·부속 (draft 이후, 일부 병렬)
-**`table-layout`** → 그 뒤 **`summary-sheet`**·**`toc-builder`**·**`appendix-builder`**(병렬).
+**`table-layout`** → 그 뒤 **`summary-sheet`**·**`toc-builder`**·**`appendix-builder`**·**`icon-artist`**(병렬). icon-artist는 문맥 맞는 아이콘 시스템을 설계하고 `rch render-icons`로 실제 PNG를 생성, 글리프 사용 규칙을 배포한다.
 
 ### Phase 4 — 비평·검증 루프
 **`critic`** 가 심사자 관점 검토 → `lanes/critic/agent/machine-feedback.json`. 이어서 `rch check <ws>` → `rch revise-loop <ws>`. 지적사항을 해당 에이전트에 다시 위임해 고친다. final 게이트 통과까지 반복(최대 3~4회). final 게이트는 두 모드다:
@@ -58,8 +58,11 @@
 ### Phase 5 — 조립·렌더
 **`finalizer`** 지휘로 `rch assemble` → final 게이트(위 두 모드 중 해당하는 것, 통과 필수) → 렌더(엔진 우선순위: 대회 양식 kordoc fill → kordoc 프리셋 → `rch build-hwpx`) → `rch render-check`.
 
-### Phase 6 — 디자인 반복 (hwpx-designer)
-구조 검증을 통과한 `report.hwpx`를 **`hwpx-designer`** 가 수상작 수준으로 끌어올린다: `rch hwpx-unpack` → XML 편집(표지·장 도비라·색 박스·아이콘 글리프·카드형 요약) → `rch hwpx-pack`(자동 render-check) 반복, 반복본은 `output/iterations/report_v<NN>.hwpx`. 완료 시 최종본과 남은 확인사항 제시(예상값 포함이면 `output/expected-claims.md` 교체 목록 안내), "한컴에서 최종 확인" 안내.
+### Phase 6 — 디자인 마무리 (hwpx-designer)
+구조 검증을 통과한 `report.hwpx`를 **`hwpx-designer`** 가 마무리한다: `rch hwpx-unpack` → XML 편집(표지·아이콘 PNG 배치·카드형 요약) → `rch hwpx-pack`(자동 render-check). 반복본은 `output/iterations/report_v<NN>.hwpx`. 완료 시 최종본과 남은 확인사항 제시(예상값 포함이면 `output/expected-claims.md` 교체 목록 안내), "한컴에서 최종 확인" 안내.
+
+## 원패스 원칙 (반복 최소화)
+디자인을 뒤로 미루지 않는다 — **집필 단계에서 이미 완성형에 가깝게** 쓴다: draft-writer·table-layout이 `:::box`·글리프·icon-artist의 아이콘 규칙을 본문에 직접 넣고, 장 제목(H1)은 렌더러가 자동으로 도비라 바로 만든다. 분량도 draft 단계에서 규정 상한까지 채운다(`render-check --min-pages`로 검사). 그래서 Phase 6의 hwpx-designer는 긴 반복이 아니라 **표지·아이콘 배치 등 1~3회 마무리 폴리시**가 기본이다(문제가 있을 때만 추가 반복).
 
 ## Autopilot 루프 (계획 승인 후 자동 발동 — 필수)
 
@@ -79,9 +82,9 @@
 - 서브에이전트가 판단이 어려운 문제를 만나면 verdict를 `blocked`+이유로 남긴다. autopilot이 그걸 `needs_user`로 승격해 사용자에게 묻는다. 사소한 선택은 blocked로 만들지 말고 보수적 기본값으로 스스로 결정한 뒤 lane-output에 기록한다.
 - `rch next`는 예상값(가상) claim이 있으면 final 게이트를 자동으로 `--allow-expected` 모드로 판정한다.
 
-## 에이전트 역할 (14)
+## 에이전트 역할 (15)
 
-`brainstorm`, `reference-miner`, `background-researcher`, `photo-curator`, `survey-analyst`, `evidence-curator`, `draft-writer`, `table-layout`, `summary-sheet`, `toc-builder`, `appendix-builder`, `critic`, `finalizer`, `hwpx-designer`(디자인 반복 — lane 없음, finalizer lane evidence에 기록). 각 lane 에이전트는 `lanes/<lane>/agent/`에 계약 파일 4종(`lane-output.md`, `lane-output.json`, `claim-ledger.json`, `verdict.json`)을 **진짜 내용**으로 채운다.
+`brainstorm`, `reference-miner`, `background-researcher`, `photo-curator`, `survey-analyst`, `evidence-curator`, `draft-writer`, `table-layout`, `summary-sheet`, `toc-builder`, `appendix-builder`, `icon-artist`(icon-visual lane — 아이콘 시스템 설계 + `rch render-icons`), `critic`, `finalizer`, `hwpx-designer`(디자인 마무리 — lane 없음, finalizer lane evidence에 기록). 각 lane 에이전트는 `lanes/<lane>/agent/`에 계약 파일 4종(`lane-output.md`, `lane-output.json`, `claim-ledger.json`, `verdict.json`)을 **진짜 내용**으로 채운다.
 
 ## 완성 원칙: 자료가 없어도 예상값으로 완성한다
 

@@ -18,6 +18,7 @@ from rch import brainstorm as brainstorm_mod
 from rch import draft as draft_mod
 from rch import hwpx as hwpx_mod
 from rch import hwpx_edit as hwpx_edit_mod
+from rch import icons as icons_mod
 from rch import photos as photos_mod
 from rch import pipeline as pipeline_mod
 from rch import references as references_mod
@@ -788,11 +789,15 @@ def hwpx_pack_cmd(workspace: Path, source_dir: Path | None, output_path: Path | 
     return 0 if check.ok else 1
 
 
-def render_check_cmd(workspace: Path, hwpx_path: Path | None, page_limit: int) -> int:
+def render_check_cmd(workspace: Path, hwpx_path: Path | None, page_limit: int, min_pages: int = 0) -> int:
     target = hwpx_path or (workspace / "output" / "report.hwpx")
     toc_path = workspace / "output" / "toc.md"
     check = render_check_mod.run_render_check(
-        target, workspace / "output", toc_path=toc_path if toc_path.exists() else None, page_limit=page_limit
+        target,
+        workspace / "output",
+        toc_path=toc_path if toc_path.exists() else None,
+        page_limit=page_limit,
+        min_pages=min_pages,
     )
     print(json.dumps(check.to_dict(), ensure_ascii=False, indent=2))
     return 0 if check.ok else 1
@@ -1265,6 +1270,11 @@ def main(argv: list[str] | None = None) -> int:
         help="렌더 엔진: builtin(결정적 구조 렌더러) 또는 kordoc(오픈소스 한국형 보고서 프리셋, Node 18+ 필요)",
     )
 
+    icons_p = sub.add_parser(
+        "render-icons", help="render input/icons/icon-spec.json into flat PNG icons (pure stdlib)"
+    )
+    icons_p.add_argument("workspace")
+
     unpack_p = sub.add_parser("hwpx-unpack", help="unpack a .hwpx zip for design-iteration XML editing")
     unpack_p.add_argument("workspace")
     unpack_p.add_argument("--hwpx", help="path to the .hwpx (default output/report.hwpx)")
@@ -1279,6 +1289,9 @@ def main(argv: list[str] | None = None) -> int:
     render_p.add_argument("workspace")
     render_p.add_argument("--hwpx", help="path to the .hwpx (default output/report.hwpx)")
     render_p.add_argument("--page-limit", type=int, default=render_check_mod.DEFAULT_PAGE_LIMIT)
+    render_p.add_argument(
+        "--min-pages", type=int, default=0, help="본문 분량 하한(추정). 미만이면 경고(예: 22)"
+    )
 
     revise_p = sub.add_parser("revise-loop", help="collect critic/check/render feedback into a backlog")
     revise_p.add_argument("workspace")
@@ -1379,6 +1392,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "build-hwpx":
         build_hwpx_cmd(Path(args.workspace), Path(args.output) if args.output else None, engine=args.engine)
         return 0
+    if args.cmd == "render-icons":
+        report = icons_mod.render_icons(Path(args.workspace))
+        print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if not report.errors else 1
     if args.cmd == "hwpx-unpack":
         hwpx_unpack_cmd(
             Path(args.workspace),
@@ -1394,7 +1411,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.cmd == "render-check":
         return render_check_cmd(
-            Path(args.workspace), Path(args.hwpx) if args.hwpx else None, args.page_limit
+            Path(args.workspace), Path(args.hwpx) if args.hwpx else None, args.page_limit, args.min_pages
         )
     if args.cmd == "revise-loop":
         revise_loop_cmd(Path(args.workspace))

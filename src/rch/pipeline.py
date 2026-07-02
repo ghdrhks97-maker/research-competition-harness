@@ -45,7 +45,7 @@ LANE_ROLES = {
     "summary-sheet": "summary-sheet",
     "toc-builder": "toc-builder",
     "appendix-builder": "appendix-builder",
-    "icon-visual": "table-layout",
+    "icon-visual": "icon-artist",
     "critic": "critic",
     "finalizer": "finalizer",
 }
