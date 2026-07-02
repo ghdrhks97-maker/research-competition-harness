@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
 
+from rch.docmodel import strip_inline_markup
+
 REQUIRED_ENTRIES = (
     "mimetype",
     "version.xml",
@@ -103,14 +105,23 @@ def _estimate_pages(body_text: str, table_count: int, row_estimate: int) -> int:
     return max(1, round(estimate))
 
 
+# A list-style TOC entry must carry a dot-leader page reference
+# ("I. 필요성 ... 1", "표지 ... i"); toc.md also holds prose sections
+# (numbering rules, consistency reports) whose bullets are NOT TOC entries.
+_TOC_PAGE_REF_RE = re.compile(r"(?:\.{2,}|…)\s*(?:\d+|[ivx]+)\s*$", re.IGNORECASE)
+
+
 def _parse_toc_headings(toc_path: Path) -> list[str]:
     if not toc_path.exists():
         return []
-    headings: list[str] = []
     lines = toc_path.read_text(encoding="utf-8", errors="replace").split("\n")
     has_table_toc = any(line.strip().startswith("|") for line in lines)
+    has_page_refs = any(
+        _TOC_PAGE_REF_RE.search(strip_inline_markup(line.strip())) for line in lines
+    )
+    headings: list[str] = []
     for line in lines:
-        stripped = line.strip()
+        stripped = strip_inline_markup(line.strip())
         if not stripped or stripped.startswith("#"):
             continue
         if has_table_toc and not stripped.startswith("|"):
@@ -124,8 +135,13 @@ def _parse_toc_headings(toc_path: Path) -> list[str]:
                 stripped = cells[1] or cells[0]
             else:
                 continue
+        elif has_page_refs and not _TOC_PAGE_REF_RE.search(stripped):
+            # toc.md가 점리더식 목차를 갖고 있으면, 페이지 참조 없는 불릿은
+            # 목차가 아니라 부속 설명(번호 부여 기준, 일치 리포트 등)이다.
+            continue
         # Drop leading list markers and trailing dot-leaders / page numbers.
         stripped = re.sub(r"^[-*0-9.)\s]+", "", stripped)
+        stripped = _TOC_PAGE_REF_RE.sub("", stripped)
         stripped = re.sub(r"[.\s]*\d+\s*$", "", stripped)
         stripped = re.sub(r"\bplaceholder\b", "", stripped, flags=re.IGNORECASE)
         stripped = stripped.strip()

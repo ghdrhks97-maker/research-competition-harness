@@ -190,6 +190,69 @@ class BackgroundResearchTests(unittest.TestCase):
             self.assertTrue((workspace / "input" / "research" / "04-background-research.md").exists())
             self.assertTrue((workspace / "lanes" / "reference-miner" / "harness-background" / "lane-output.md").exists())
 
+    def test_query_plan_covers_every_chapter(self) -> None:
+        from rch.background import CHAPTER_KEYS, build_query_plan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            init_workspace(workspace)
+            plans = build_query_plan("음악 사회정서학습 수업", workspace)
+            chapters = {plan.chapter for plan in plans}
+            self.assertEqual(chapters, set(CHAPTER_KEYS))
+            # 장별 배분 루프가 의미 있으려면 질의가 장 수 이상이어야 한다.
+            self.assertGreaterEqual(len(plans), len(CHAPTER_KEYS))
+
+    def test_sources_are_chapter_tagged_and_markdown_maps_them(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            init_workspace(workspace)
+            calls: list[str] = []
+
+            def fake_fetch(url: str) -> str:
+                calls.append(url)
+                if "api.openalex.org" in url:
+                    query = url.split("search=")[1].split("&")[0]
+                    return json.dumps(
+                        {
+                            "results": [
+                                {
+                                    "display_name": f"Study for {query[:24]}",
+                                    "doi": f"https://doi.org/10.1000/{len(calls)}",
+                                    "publication_year": 2024,
+                                }
+                            ]
+                        }
+                    )
+                if "semanticscholar.org" in url:
+                    return json.dumps(
+                        {
+                            "data": [
+                                {
+                                    "title": f"S2 paper {len(calls)}",
+                                    "url": f"https://s2.example/{len(calls)}",
+                                    "year": 2023,
+                                    "abstract": "Effect study.",
+                                    "authors": [{"name": "B. Scholar"}],
+                                }
+                            ]
+                        }
+                    )
+                if "ko.wikipedia.org" in url:
+                    return json.dumps(
+                        {"query": {"search": [{"title": "사회정서학습", "snippet": "<span>정의</span> 개념"}]}}
+                    )
+                raise RuntimeError("route unavailable")
+
+            research = run_background_research(
+                workspace, query="사회정서학습 음악 수업", fetcher=fake_fetch, max_results=12
+            )
+            self.assertFalse(research.fallback_used)
+            chapters = {source.chapter for source in research.sources}
+            self.assertGreaterEqual(len(chapters - {""}), 2, chapters)
+            markdown = (workspace / "input" / "research" / "04-background-research.md").read_text(encoding="utf-8")
+            self.assertIn("장별 배치 제안", markdown)
+            self.assertIn("I. 필요성 및 목적", markdown)
+
     def test_draft_uses_background_research_section(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"

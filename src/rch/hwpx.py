@@ -59,6 +59,16 @@ CHAPTER_BAR_FILL_ID = 4
 BODY_WIDTH = 42520
 ROW_HEIGHT = 1700
 
+# Monotonic paragraph-id counter.  secPr carrier uses id="0", so body
+# paragraphs start at 1.  Must be reset before each build invocation.
+_para_id_counter = 0
+
+def _next_para_id() -> int:
+    global _para_id_counter
+    _para_id_counter += 1
+    return _para_id_counter
+
+
 
 @dataclass
 class BuildResult:
@@ -73,33 +83,136 @@ class BuildResult:
     missing_images: list[str] = field(default_factory=list)
 
 
+# Hancom's bundled fonts (함초롬 계열) have no emoji glyphs, so emoji render
+# as empty boxes both in Hancom and in the rhwp PDF renderer. Strip them at
+# the XML boundary; geometric shapes (■/▶/●, U+25A0–25FF) and arrows
+# (U+2190–21FF) survive because the fonts do cover those.
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F000-\U0001FAFF"  # emoji & pictographs (astral plane)
+    "☀-➿"  # misc symbols + dingbats (☀ ✅ ❓ ✂ …)
+    "⬀-⯿"  # misc symbols and arrows (⭐ ⬆ …)
+    "︀-️"  # variation selectors
+    "‍"  # zero-width joiner
+    "⃣"  # combining enclosing keycap
+    "]+"
+)
+
+
+def _strip_unrenderable(text: str) -> str:
+    text = _EMOJI_RE.sub("", text)
+    return re.sub(r"  +", " ", text)
+
+
 def _x(text: str) -> str:
-    return escape(strip_inline_markup(text))
+    return escape(_strip_unrenderable(strip_inline_markup(text)))
 
 
 def _run(text: str, char_id: int = 0) -> str:
     return f'<hp:run charPrIDRef="{char_id}"><hp:t>{_x(text)}</hp:t></hp:run>'
 
 
+# Zero-height lineseg marker. Layout-cache honouring consumers (rhwp, and
+# Hancom's PDF export) need one lineseg per paragraph: rhwp's HWPX parser
+# leaves `line_segs` empty when the array is missing and then renders the
+# whole paragraph as a single unwrapped line, so text overlaps. A single
+# all-zero lineseg instead triggers rhwp's automatic reflow
+# (`len == 1 && vertsize == 0`), which recomputes wrapping and heights from
+# CharPr/ParaPr at load time.
+LINESEG_RECALC = (
+    "<hp:linesegarray>"
+    '<hp:lineseg textpos="0" vertpos="0" vertsize="0" textheight="0"'
+    ' baseline="0" spacing="0" horzpos="0" horzsize="0" flags="393216"/>'
+    "</hp:linesegarray>"
+)
+
+
 def _paragraph(text: str, para_id: int = BODY_PARA, char_id: int = 0) -> str:
-    return f'<hp:p paraPrIDRef="{para_id}" styleIDRef="0">{_run(text, char_id)}</hp:p>'
+    pid = _next_para_id()
+    return (
+        f'<hp:p id="{pid}" paraPrIDRef="{para_id}" styleIDRef="0"'
+        f' pageBreak="0" columnBreak="0" merged="0">'
+        f'{_run(text, char_id)}{LINESEG_RECALC}</hp:p>'
+    )
 
 
-def _col_widths(col_count: int) -> list[int]:
-    base = BODY_WIDTH // col_count
-    widths = [base] * col_count
-    widths[-1] += BODY_WIDTH - base * col_count
+# Geometry estimation. These tables are anchored `treatAsChar` and layout
+# consumers (Hancom's TAC line height, rhwp's measured layout) size the host
+# line from the DECLARED hp:sz/hp:cellSz geometry — a lowballed height makes
+# following text overlap the table and clips cell content. So the producer
+# must declare realistic heights: estimate wrapped line counts from
+# character widths (10pt body: hangul ≈ full width 1000 HWPUNIT, latin ≈ 520).
+CELL_H_PADDING = 282  # top+bottom cellMargin (141 each)
+CELL_W_PADDING = 1020  # left+right cellMargin (510 each)
+LINE_BLOCK = 1600  # one 10pt text line incl. 160% line spacing, in HWPUNIT
+MIN_COL_WIDTH = 3200
+
+
+def _text_units(text: str) -> int:
+    """Approximate rendered width of `text` at 10pt, in HWPUNIT."""
+    units = 0
+    for ch in text:
+        units += 1000 if ord(ch) >= 0x2E80 else 520
+    return units
+
+
+def _cell_line_count(text: str, cell_width: int) -> int:
+    avail = max(cell_width - CELL_W_PADDING, 600)
+    plain = strip_inline_markup(text)
+    return max(1, -(-_text_units(plain) // avail))  # ceil division
+
+
+# Extra headroom on declared heights. Underestimating clips cell text in
+# lineseg-honouring renderers; overestimating only adds whitespace (Hancom
+# treats the declared height as a minimum), so err on the tall side.
+HEIGHT_SLACK = 600
+
+
+def _row_height(cells: list[str], widths: list[int]) -> int:
+    lines = 1
+    for index, cell in enumerate(cells):
+        width = widths[index] if index < len(widths) else widths[-1]
+        lines = max(lines, _cell_line_count(cell, width))
+    return lines * LINE_BLOCK + CELL_H_PADDING + HEIGHT_SLACK
+
+
+def _col_widths(col_count: int, rows: list[list[str]] | None = None) -> list[int]:
+    if not rows:
+        base = BODY_WIDTH // col_count
+        widths = [base] * col_count
+        widths[-1] += BODY_WIDTH - base * col_count
+        return widths
+    # Distribute the body width by each column's content weight so long-text
+    # columns wrap less; every column keeps a readable minimum.
+    weights = [1] * col_count
+    for row in rows:
+        for index in range(col_count):
+            cell = row[index] if index < len(row) else ""
+            weights[index] = max(weights[index], _text_units(strip_inline_markup(cell)))
+    weights = [max(w, MIN_COL_WIDTH) for w in weights]
+    total = sum(weights)
+    widths = [max(MIN_COL_WIDTH, BODY_WIDTH * w // total) for w in weights]
+    widths[-1] += BODY_WIDTH - sum(widths)
+    if widths[-1] < MIN_COL_WIDTH:  # rebalance if the tail column got squeezed
+        deficit = MIN_COL_WIDTH - widths[-1]
+        widths[-1] = MIN_COL_WIDTH
+        widest = max(range(col_count - 1), key=lambda i: widths[i], default=0)
+        widths[widest] -= deficit
     return widths
 
 
-def _tbl_open(row_cnt: int, col_cnt: int, border_fill: int) -> str:
+def _tbl_open(row_cnt: int, col_cnt: int, border_fill: int, total_height: int) -> str:
     return (
         f'<hp:tbl id="0" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" '
         f'textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="1" '
         f'rowCnt="{row_cnt}" colCnt="{col_cnt}" cellSpacing="0" borderFillIDRef="{border_fill}" noAdjust="0">'
-        f'<hp:sz width="{BODY_WIDTH}" widthRelTo="ABSOLUTE" height="{row_cnt * ROW_HEIGHT}" '
+        f'<hp:sz width="{BODY_WIDTH}" widthRelTo="ABSOLUTE" height="{total_height}" '
         f'heightRelTo="ABSOLUTE" protect="0"/>'
-        '<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" '
+        # treatAsChar="0" (자리차지): a char-anchored table cannot split across
+        # pages in Hancom, so a tall table gets pushed wholesale to the next
+        # page leaving a large gap. Non-TAC + pageBreak="CELL" splits by row,
+        # matching how Hancom-authored reports (v203) anchor their tables.
+        '<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="0" '
         'holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" '
         'vertOffset="0" horzOffset="0"/>'
         '<hp:outMargin left="0" right="0" top="141" bottom="141"/>'
@@ -107,7 +220,7 @@ def _tbl_open(row_cnt: int, col_cnt: int, border_fill: int) -> str:
     )
 
 
-def _tc(paragraphs: str, col: int, row: int, width: int, fill: int) -> str:
+def _tc(paragraphs: str, col: int, row: int, width: int, fill: int, height: int = ROW_HEIGHT) -> str:
     return (
         f'<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" '
         f'borderFillIDRef="{fill}">'
@@ -116,7 +229,7 @@ def _tc(paragraphs: str, col: int, row: int, width: int, fill: int) -> str:
         f'hasNumRef="0">{paragraphs}</hp:subList>'
         f'<hp:cellAddr colAddr="{col}" rowAddr="{row}"/>'
         '<hp:cellSpan colSpan="1" rowSpan="1"/>'
-        f'<hp:cellSz width="{width}" height="{ROW_HEIGHT}"/>'
+        f'<hp:cellSz width="{width}" height="{height}"/>'
         '<hp:cellMargin left="510" right="510" top="141" bottom="141"/>'
         "</hp:tc>"
     )
@@ -126,8 +239,9 @@ def _table(rows: list[list[str]]) -> str:
     if not rows:
         return ""
     col_count = max(len(row) for row in rows)
-    widths = _col_widths(col_count)
-    parts = [_tbl_open(len(rows), col_count, 1)]
+    widths = _col_widths(col_count, rows)
+    row_heights = [_row_height(row, widths) for row in rows]
+    parts = [_tbl_open(len(rows), col_count, 1, sum(row_heights))]
     for row_index, row in enumerate(rows):
         parts.append("<hp:tr>")
         for col_index in range(col_count):
@@ -139,19 +253,24 @@ def _table(rows: list[list[str]]) -> str:
                 TABLE_HEADER_PARA if header else BODY_PARA,
                 TABLE_HEADER_CHAR if header else 0,
             )
-            parts.append(_tc(para, col_index, row_index, widths[col_index], fill_id))
+            parts.append(
+                _tc(para, col_index, row_index, widths[col_index], fill_id, row_heights[row_index])
+            )
         parts.append("</hp:tr>")
     parts.append("</hp:tbl>")
     # A table object lives inside a paragraph run in OWPML.
-    return f'<hp:p paraPrIDRef="{BODY_PARA}" styleIDRef="0"><hp:run charPrIDRef="0">{"".join(parts)}</hp:run></hp:p>'
-
-
-def _single_cell_table(paragraphs: str, fill_id: int) -> str:
     return (
         f'<hp:p paraPrIDRef="{BODY_PARA}" styleIDRef="0"><hp:run charPrIDRef="0">'
-        f"{_tbl_open(1, 1, fill_id)}<hp:tr>"
-        f"{_tc(paragraphs, 0, 0, BODY_WIDTH, fill_id)}"
-        "</hp:tr></hp:tbl></hp:run></hp:p>"
+        f'{"".join(parts)}</hp:run>{LINESEG_RECALC}</hp:p>'
+    )
+
+
+def _single_cell_table(paragraphs: str, fill_id: int, height: int = ROW_HEIGHT) -> str:
+    return (
+        f'<hp:p paraPrIDRef="{BODY_PARA}" styleIDRef="0"><hp:run charPrIDRef="0">'
+        f"{_tbl_open(1, 1, fill_id, height)}<hp:tr>"
+        f"{_tc(paragraphs, 0, 0, BODY_WIDTH, fill_id, height)}"
+        f"</hp:tr></hp:tbl></hp:run>{LINESEG_RECALC}</hp:p>"
     )
 
 
@@ -159,18 +278,23 @@ def _chapter_bar(text: str, level: int) -> str:
     # Chapter heading on an accent-filled full-width bar; the inner paragraph
     # keeps the heading paraPr id so toc matching still sees it as a heading.
     heading = _paragraph(text, HEADING_PARA.get(level, 3), CHAPTER_BAR_CHAR)
-    return _single_cell_table(heading, CHAPTER_BAR_FILL_ID)
+    # 16pt bar text: one line ≈ 16pt * 160% = 2560 HWPUNIT plus cell padding.
+    return _single_cell_table(heading, CHAPTER_BAR_FILL_ID, 2560 + CELL_H_PADDING)
 
 
 def _callout_box(title: str, lines: list[str]) -> str:
     paragraphs: list[str] = []
+    height = CELL_H_PADDING
     if title:
         paragraphs.append(_paragraph(title, BODY_PARA, 2))
+        # Box titles use the 13pt char shape → 13pt * 160% ≈ 2080 per line.
+        height += _cell_line_count(title, BODY_WIDTH) * 2080
     for line in lines:
         paragraphs.append(_paragraph(line, BODY_PARA, 0))
+        height += _cell_line_count(line, BODY_WIDTH) * LINE_BLOCK
     if not paragraphs:
         return ""
-    return _single_cell_table("".join(paragraphs), BOX_BORDER_FILL_ID)
+    return _single_cell_table("".join(paragraphs), BOX_BORDER_FILL_ID, height + HEIGHT_SLACK)
 
 
 def _blocks_to_section(blocks: list[Block], images_root: Path, result: BuildResult) -> str:
@@ -230,7 +354,7 @@ def _header_xml(section_count: int = 1) -> str:
         '<hh:fontfaces itemCnt="7">'
         + "".join(
             f'<hh:fontface lang="{lang}" fontCnt="1">'
-            '<hh:font id="0" face="함초롬바탕" type="TTF" isEmbedded="0"/></hh:fontface>'
+            '<hh:font id="0" face="함초롬돋움" type="TTF" isEmbedded="0"/></hh:fontface>'
             for lang in ("HANGUL", "LATIN", "HANJA", "JAPANESE", "OTHER", "SYMBOL", "USER")
         )
         + "</hh:fontfaces>"
@@ -295,17 +419,27 @@ def _header_xml(section_count: int = 1) -> str:
 def _char_property(index: int, height: int, bold: int, color: str = "#000000") -> str:
     bold_tag = "<hh:bold/>" if bold else ""
     return (
-        f'<hh:charPr id="{index}" height="{height}" textColor="{color}" shadeColor="none">'
+        f'<hh:charPr id="{index}" height="{height}" textColor="{color}" shadeColor="none"'
+        f' useFontSpace="0" useKerning="0" symMark="NONE" borderFillIDRef="0">'
         f'<hh:fontRef hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>'
+        f'<hh:ratio hangul="100" latin="100" hanja="100" japanese="100" other="100" symbol="100" user="100"/>'
+        f'<hh:spacing hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>'
+        f'<hh:relSz hangul="100" latin="100" hanja="100" japanese="100" other="100" symbol="100" user="100"/>'
+        f'<hh:offset hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>'
+        f'<hh:underline type="NONE" shape="SOLID" color="#000000"/>'
+        f'<hh:strikeout shape="NONE" color="#000000"/>'
+        f'<hh:outline type="NONE"/>'
+        f'<hh:shadow type="NONE" color="#C0C0C0" offsetX="10" offsetY="10"/>'
         f"{bold_tag}</hh:charPr>"
     )
 
 
 def _para_property(index: int, align: str = "LEFT") -> str:
     return (
-        f'<hh:paraPr id="{index}" tabPrIDRef="0" condense="0" fontLineHeight="0" '
+        f'<hh:paraPr id="{index}" tabPrIDRef="0" condense="0" fontLineHeight="1" '
         f'snapToGrid="1" suppressLineNumbers="0" checked="0">'
         f'<hh:align horizontal="{align}" vertical="BASELINE"/>'
+        f'<hh:lineSpacing type="PERCENT" value="160"/>'
         f"</hh:paraPr>"
     )
 
@@ -355,7 +489,7 @@ def _secpr_paragraph() -> str:
         f'<hp:p id="0" paraPrIDRef="{BODY_PARA}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">'
         f'<hp:run charPrIDRef="0">{_sec_pr()}</hp:run>'
         f'<hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>'
-        "</hp:p>"
+        f"{LINESEG_RECALC}</hp:p>"
     )
 
 
@@ -457,6 +591,8 @@ def _write_hwpx_package(
     images_root: Path,
     result: BuildResult,
 ) -> BuildResult:
+    global _para_id_counter
+    _para_id_counter = 0
     section_files: list[str] = []
     section_xmls: list[tuple[str, str]] = []
     preview_blocks: list[Block] = []
@@ -573,9 +709,26 @@ def _cover_markdown(workspace: Path, preview: bool = False) -> str:
     return "\n".join(lines)
 
 
+# `rch assemble` prefixes each bundle file with provenance scaffolding
+# (`# summary-sheet.md`, `## draft-writer / antigravity`). Useful for lane
+# traceability, but in the built report they render as fake titles and break
+# the TOC↔heading match, so the finalizer drops them.
+_SCAFFOLD_FILE_HEADING = re.compile(r"^#\s+[\w.-]+\.md\s*$")
+_SCAFFOLD_LANE_HEADING = re.compile(r"^##\s+[\w-]+\s*/\s*[\w-]+\s*$")
+
+
+def _strip_assembly_scaffold(text: str) -> str:
+    lines = [
+        line
+        for line in text.splitlines()
+        if not _SCAFFOLD_FILE_HEADING.match(line) and not _SCAFFOLD_LANE_HEADING.match(line)
+    ]
+    return "\n".join(lines).strip()
+
+
 def _read_part(path: Path, fallback_title: str) -> str:
     if path.exists():
-        text = path.read_text(encoding="utf-8", errors="replace").strip()
+        text = _strip_assembly_scaffold(path.read_text(encoding="utf-8", errors="replace"))
         if text:
             return text
     return f"# {fallback_title}\n\n자료 없음"

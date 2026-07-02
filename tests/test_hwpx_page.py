@@ -95,6 +95,31 @@ class DesignRenderingTests(unittest.TestCase):
             self.assertIn("▶ 어떻게 기를 것인가?", section)
             self.assertIn("#EEF3FA", header)
 
+    def test_every_paragraph_carries_reflow_lineseg(self) -> None:
+        # rhwp's HWPX parser leaves `line_segs` empty when a paragraph has no
+        # <hp:linesegarray>. Its automatic reflow only triggers on
+        # `len == 1 && vertsize == 0`, so paragraphs without the marker render
+        # as a single unwrapped line (text overlaps in the exported PDF).
+        # Every <hp:p> must therefore carry a zero-height lineseg.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "report.hwpx"
+            md = (
+                "# 문서 제목\n\n"
+                "긴 본문 문단입니다. " * 10 + "\n\n"
+                "# I. 장 제목\n\n"
+                "| 항목 | 값 |\n| --- | --- |\n| a | 1 |\n\n"
+                ":::box 확인\n상자 내용\n:::\n"
+            )
+            build_hwpx(md, out, images_root=Path(tmp))
+            with zipfile.ZipFile(out) as archive:
+                section = archive.read("Contents/section0.xml").decode("utf-8")
+            import re
+
+            para_count = len(re.findall(r"<hp:p[ >]", section))
+            lineseg_count = len(re.findall(r"<hp:linesegarray>", section))
+            self.assertEqual(para_count, lineseg_count, (para_count, lineseg_count))
+            self.assertIn('vertsize="0"', section)
+
     def test_tables_carry_explicit_geometry_for_hancom(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "report.hwpx"
@@ -105,7 +130,8 @@ class DesignRenderingTests(unittest.TestCase):
             # Without hp:sz/hp:cellSz Hancom cannot lay tables out (they collapse).
             self.assertIn('<hp:sz width="42520"', section)
             self.assertIn("<hp:cellSz", section)
-            self.assertIn('treatAsChar="1"', section)
+            # 자리차지 anchoring — char-anchored tables cannot split across pages.
+            self.assertIn('treatAsChar="0"', section)
             # Column widths must sum to the body width.
             import re
 
@@ -204,7 +230,7 @@ class DiagnoseTests(unittest.TestCase):
             self.assertTrue(any("report.hwpx 없음" in s for s in report["signals"]), report["signals"])
 
 
-def _rich_body(chars: int = 9000) -> str:
+def _rich_body(chars: int = 18000) -> str:
     paragraph = "학생들은 감상과 창작 활동에서 자신의 정서를 음악 요소로 표현하고 서로의 산출물에 근거를 들어 피드백하였다. "
     body = ["# H.A.R.M.O.N.Y 프로젝트", ""]
     while sum(len(line) for line in body) < chars:
