@@ -62,6 +62,19 @@ rch agent-harness 2026-competition --agent codex --agent claude --offline-resear
 - 보강 목록: `output/missing-inputs.md`
 - 최종 안전장치: placeholder claim과 `needs-work` verdict가 남아 `rch check --final` 통과는 막음
 
+### output에 표만 보일 때
+
+`output/report.hwpx`가 있더라도 `rch diagnose <workspace>`가 final gate 실패를 말하면 제출용 최종본이 아닙니다. 특히 `rch go --skeleton` 또는 과거 강제 빌드 산출물이 남아 있으면 표·placeholder 중심 문서가 output에 보일 수 있습니다.
+
+```bash
+rch diagnose <workspace>
+rch next <workspace>
+```
+
+`--force` 중간 확인본은 항상 `output/report-preview.hwpx`에만 저장됩니다. `output/report.hwpx`는 final gate와 build gate를 통과한 bundle에서만 만들어져야 합니다.
+
+`rch next`가 `revise`를 반환하면 `rch revise-loop <workspace>`를 실행한 뒤 critic, draft, finalizer lane을 다시 돌립니다. placeholder/expected claim, `초안`, missing finalizer source, `claim-ledger.json` 오류가 남아 있으면 `rch build-hwpx`는 최종본을 만들지 않습니다.
+
 세부 단계 직접 실행:
 
 ```bash
