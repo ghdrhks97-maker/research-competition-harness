@@ -31,6 +31,7 @@ pip install -e ".[mcp]"     # mcp 패키지 포함 설치
 | `build_hwpx(workspace, output?)` | HWPX 렌더 |
 | `render_check(workspace, hwpx?, page_limit?)` | HWPX 구조·페이지 검증 |
 | `revise_loop(workspace)` | 피드백 백로그 통합 |
+| `next(workspace)` | autopilot: 다음 작업(위임/명령)을 결정적으로 판정. `needs_user`가 비면 actions 실행 후 재호출, `done=true`까지 반복 |
 
 모든 도구는 첫 인자로 작업공간 경로를 받고 JSON 결과를 돌려줍니다.
 

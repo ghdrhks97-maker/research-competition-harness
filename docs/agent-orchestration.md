@@ -44,6 +44,16 @@ GEMINI.md                              # AGENTS.md 포인터
 
 승인 전에는 본문 생성을 시작하지 않는다(가재코드 deep-interview → ralplan → 실행 패턴).
 
+## Autopilot 루프
+
+계획 승인(`competition-profile.json`의 `plan_approved: true`) 이후에는 추가 질문 없이 완주한다. 드라이버는 결정적 상태 머신 `rch next <ws>`(LLM 호출 없음):
+
+- `done=true` → 종료 보고 (한컴 육안 확인 + `output/expected-claims.md` 교체 목록 안내)
+- `needs_user` 존재 → 그 항목만 사용자에게 질문 (계획 미승인, verdict `blocked` 등)
+- 그 외 → `actions` 실행(`run`=rch 명령, `delegate`=서브에이전트 위임, `parallel=true`면 동시 스폰) 후 다시 `rch next`
+
+품질 문제는 재위임으로 스스로 해소하고, 같은 phase 3회 연속 실패 시에만 멈춰 보고한다. 서브에이전트는 사용자만 풀 수 있는 문제를 만나면 verdict를 `blocked`+이유로 남긴다(autopilot이 `needs_user`로 승격).
+
 ## 안전
 
 증거 없는 수치·발화·성과·인용 금지(예상값은 "예상값(가상)" 라벨+`expected`, 빈 구멍은 `placeholder`), 설문 수치는 `rch import-survey` 결과만, 위험 사진 배제, 레퍼런스·웹 복사 금지, 최종 금지어 없음, HWPX 조립 1회. 최종 게이트는 `rch check --final`(실제 자료만) 또는 `rch check --final --allow-expected`(라벨링된 예상값 포함 완성본, 교체 목록 `output/expected-claims.md`). 구조 통과 ≠ Hancom 실제 표시(사람이 한컴 확인).

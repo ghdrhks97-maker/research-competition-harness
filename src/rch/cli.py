@@ -15,6 +15,7 @@ from rch import brainstorm as brainstorm_mod
 from rch import draft as draft_mod
 from rch import hwpx as hwpx_mod
 from rch import photos as photos_mod
+from rch import pipeline as pipeline_mod
 from rch import references as references_mod
 from rch import render_check as render_check_mod
 from rch import revise as revise_mod
@@ -1128,6 +1129,11 @@ def main(argv: list[str] | None = None) -> int:
         help="final에서 라벨링된 예상값(status=expected) 주장을 허용 (교체 목록을 output/expected-claims.md에 기록)",
     )
 
+    next_p = sub.add_parser(
+        "next", help="autopilot: 다음에 할 작업(위임/명령)을 결정적으로 판정해 JSON으로 출력"
+    )
+    next_p.add_argument("workspace")
+
     survey_p = sub.add_parser("import-survey", help="analyze a pre/post survey CSV/TSV/XLSX")
     survey_p.add_argument("workspace")
     survey_p.add_argument("survey", help="path to the survey file")
@@ -1240,6 +1246,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
         return 0 if result.ok else 1
+    if args.cmd == "next":
+        plan = pipeline_mod.run_next(Path(args.workspace), final_check=check_workspace)
+        print(json.dumps(plan.to_dict(), ensure_ascii=False, indent=2))
+        return 0
     if args.cmd == "import-survey":
         import_survey_cmd(Path(args.workspace), Path(args.survey))
         return 0
