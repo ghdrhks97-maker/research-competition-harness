@@ -27,12 +27,12 @@ description: 연구대회 보고서를 완성하는 진입점. "연구보고서 
 설문 CSV가 있으면 먼저 `rch import-survey <ws> <csv>`(통계). 그다음 아래를 **동시에** Task로:
 - `reference-miner`(우수 보고서 구조 직접 분석)
 - `background-researcher`(insane 리서치: 이론·선행연구)
-- `photo-curator`(사진 개인정보 실제 검토)
+- `photo-curator`(사진 개인정보 실제 검토; 없으면 "사진첨부필요" 자리표시)
 - `evidence-curator`(주장↔증거)
-- `survey-analyst`(rch 통계 해석)
+- `survey-analyst`(설문 있으면 rch 통계 해석, **없으면 "바라는 결과" 기반 예상 설문값 생성** — 항상 실행)
 
 ### Phase 2 — 집필
-`draft-writer` 서브에이전트가 Phase 1 결과를 모두 읽고 I~V장 본문 집필.
+`draft-writer` 서브에이전트가 Phase 1 결과를 모두 읽고 I~V장 본문 집필. **설문·사진이 없어도 예상값으로 각 장을 완성**한다(대괄호 빈칸 금지).
 
 ### Phase 3 — 편집·부속
 `table-layout` → 그 뒤 `summary-sheet`·`toc-builder`·`appendix-builder`(병렬).

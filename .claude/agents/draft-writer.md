@@ -19,8 +19,9 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 1. `lane-output.md` — I~V장 본문. 각 장:
    - I. 연구의 필요성 및 목적, II. 이론적 배경·실태, III. 수업 설계·실천과제, IV. 실천 과정·결과, V. 결론·제언
    - **표가 말하고 본문이 해석하는 구조**. 긴 설명은 3~5열 표/단계 카드로.
-   - IV장 결과에는 설문 분석 표를 그대로 넣고, 변화·효과크기를 정직하게 해석.
+   - IV장 결과에는 `survey-analyst`가 만든 표를 그대로 넣는다. **실제 설문이면** 변화·효과크기를 정직하게 해석하고, **예상값(가상)이면** 표·문장에 "예상값" 라벨을 유지하고 "이 수업이 의도한 예상 변화"로 서술한다(측정된 사실처럼 쓰지 않음).
    - 첫 3분 안에 필요성·수업 구조·학생 변화가 읽히게.
+   - **대괄호 빈칸을 남기지 않는다.** 자료가 없어도 "바라는 결과"와 예상값으로 각 장을 완성한다(미확정은 예상값+placeholder claim으로).
 2. `lane-output.json` — `{"lane":"draft-writer","agent":"agent","summary":"...","artifacts":[]}`
 3. `claim-ledger.json` — 문단별 핵심 주장을 real/derived/placeholder로 분류. 설문 근거 문장은 `derived`(evidence: 분석 경로), 미확정은 `placeholder`.
 4. `verdict.json` — `{"status":"pass|needs-work|blocked","reason":"..."}`
@@ -31,9 +32,9 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 - 실천과제는 3~5개로 제한하고 결과·확산까지 연결.
 
 ## 절대 금지
-- 증거 없는 설문 수치·학생 발화·수업 결과·확산 실적을 지어내지 않는다. 없으면 `placeholder` claim.
-- 설문 수치는 `input/surveys/analysis/` 값만 쓴다. 임의 숫자 금지.
+- 실제 조사 결과가 없는 수치·발화·성과를 **실제인 것처럼** 쓰지 않는다. 예상값은 "예상값(가상)" 라벨 + `placeholder` claim으로만.
+- 설문 표는 `survey-analyst` 산출물(`input/surveys/analysis/`)만 쓴다. 본문에서 임의로 다른 숫자를 만들지 않는다.
 - 레퍼런스 문장·표 복사 금지(구조만 참고).
-- 본문에 예정/추후/초안/미정/TODO 금지.
+- 본문에 예정/추후/초안/미정/TODO 금지(단 "예상값(가상)" 라벨은 허용).
 
 마치면 `rch check <ws>`가 draft-writer lane을 통과하는지 확인하고, placeholder가 남으면 무엇이 더 필요한지 orchestrator에 보고한다.
