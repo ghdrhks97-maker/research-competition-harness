@@ -38,6 +38,7 @@
 | `rch import-photos <ws>` | 사진 매니페스트 + 개인정보 점검표(본문/요약/부록/제외 분류, 블러 지시) | `input/photos/analysis/` |
 | `rch mine-references <ws>` | 레퍼런스 보고서에서 목차·표 밀도·부록 패턴 등 **구조만** 추출 | `input/references/analysis/` |
 | `rch draft <ws>` | 분석 결과로 I~V장 본문·요약서·목차·부록 초안 생성(claim 태그 부착) | 쓰기 lane 4종 |
+| `rch next <ws>` | **autopilot 드라이버**. 작업공간 상태를 보고 다음 작업(위임할 lane/실행할 명령)을 결정적으로 판정 | `output/next-plan.{json,md}` |
 | `rch run-lanes <ws> <agent>` | lane별 프롬프트 번들 생성(외부 에이전트 배정용). `--execute` 시 로그인 확인 후 실제 호출 | `prompts/<agent>/` |
 | `rch agents preflight <ws>` | Codex/Antigravity/Claude CLI 설치·로그인 자동 확인 | `output/agent-preflight.{json,md}` |
 | `rch agents run <ws> <agent> --lanes ...` | 프롬프트를 에이전트 CLI로 실제 호출해 응답 수집 | `lanes/<lane>/<agent>/agent-response.md` |
@@ -130,6 +131,18 @@ pip install -e ".[mcp]"     # rch + rch-mcp(MCP 서버) 설치
 ### 파이프라인 (의존성 = 병렬 그룹)
 
 인터뷰 → `brainstorm` → **[병렬]** `reference-miner`·`background-researcher`·`photo-curator`·`evidence-curator`·`survey-analyst`(+`rch import-survey`) → `draft-writer` → `table-layout`→`summary-sheet`/`toc-builder`/`appendix-builder` → `critic`+`rch check`/`revise-loop` → `finalizer`+`rch assemble`/`build-hwpx`/`render-check`. 상세는 [`AGENTS.md`](AGENTS.md), [`docs/agent-orchestration.md`](docs/agent-orchestration.md).
+
+### Autopilot: 계획 승인 후에는 질문 없이 완주
+
+인터뷰에서 **계획 승인이 나면**(`competition-profile.json`의 `plan_approved: true`) 에이전트는 더 묻지 않고 `rch next <ws>` 루프로 Phase 1~5를 연속 실행해 `output/report.hwpx`까지 만듭니다.
+
+```text
+rch next <ws> → done?        → 종료 보고 (한컴 확인 + expected-claims.md 안내)
+             → needs_user?  → 그 항목만 사용자에게 질문 (동의·개인정보·blocked verdict)
+             → actions      → run(rch 명령) / delegate(서브에이전트, parallel이면 동시) → 다시 rch next
+```
+
+`rch next`는 lane verdict·산출물 존재·final 게이트를 결정적으로 검사해 다음 작업을 JSON으로 내놓는 상태 머신입니다(LLM 호출 없음, `output/next-plan.json`). 품질 문제(critic 지적·check 오류·render 실패)는 사용자에게 묻지 않고 해당 lane 재위임으로 해소하며, 멈추는 경우는 `needs_user`·개인정보 위험·같은 phase 3회 연속 실패뿐입니다.
 
 ### 에이전트별 사용법 (13종)
 

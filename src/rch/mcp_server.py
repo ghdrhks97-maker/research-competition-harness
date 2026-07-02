@@ -22,6 +22,7 @@ from rch import brainstorm as brainstorm_mod
 from rch import draft as draft_mod
 from rch import hwpx as hwpx_mod
 from rch import photos as photos_mod
+from rch import pipeline as pipeline_mod
 from rch import references as references_mod
 from rch import render_check as render_check_mod
 from rch import revise as revise_mod
@@ -139,6 +140,12 @@ def op_check(workspace: str, final: bool = False, allow_expected: bool = False) 
     path = _ws(workspace)
     result = check_workspace(path, final=final, allow_expected=allow_expected)
     return result.to_dict()
+
+
+def op_next(workspace: str) -> dict[str, Any]:
+    path = _ws(workspace)
+    plan = pipeline_mod.run_next(path, final_check=check_workspace)
+    return plan.to_dict()
 
 
 def op_build_hwpx(workspace: str, output: str | None = None) -> dict[str, Any]:
@@ -357,6 +364,13 @@ def build_server() -> Any:
     def revise_loop(workspace: str) -> dict[str, Any]:
         """critic·check·render-check 피드백을 우선순위 수정 백로그로 통합한다."""
         return op_revise_loop(workspace)
+
+    @app.tool()
+    def next(workspace: str) -> dict[str, Any]:
+        """autopilot: 다음에 할 작업(위임/명령)을 결정적으로 판정한다.
+        needs_user가 비어 있으면 actions를 실행하고 다시 next를 호출하는 식으로
+        done=true까지 반복한다."""
+        return op_next(workspace)
 
     return app
 

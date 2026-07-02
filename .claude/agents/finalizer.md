@@ -48,8 +48,9 @@ render-check JSON에서 **모두** 확인:
    - pandoc이 없으면 `output/report-draft.md`(합본 markdown)를 그대로 열어 한컴에 붙여넣기/저장하도록 안내.
 
 ## 마무리
-- `lanes/finalizer/agent/`에 4개 계약 파일 작성. finalization 체크리스트(정합성·render-check 결과·남은 위험) 기록.
-- 사용자에게 **반드시** 보고: render-check 결과 요약 + "한컴/HOP에서 `output/report.hwpx`(또는 report.docx)를 열어 **페이지 수·표 흐름·이미지 겹침·목차 번호**를 직접 확인하세요." 확인 전 verdict = `needs-work`.
+- `lanes/finalizer/agent/`에 4개 계약 파일 작성. finalization 체크리스트(정합성·render-check 결과·남은 위험·**한컴 육안 확인 등 사람 확인 항목**) 기록.
+- verdict 판정: 정합성 확인 + final 게이트 통과 + render-check `ok:true`면 **`pass`**(한컴 육안 확인은 체크리스트의 "사람 확인 항목"으로 남긴다 — verdict를 그 이유로 needs-work로 두면 autopilot이 교착된다). 그 조건을 못 채웠으면 `needs-work`, 사용자만 풀 수 있는 문제(동의·자료)면 `blocked`+이유.
+- 사용자에게 **반드시** 보고: render-check 결과 요약 + "한컴/HOP에서 `output/report.hwpx`(또는 report.docx)를 열어 **페이지 수·표 흐름·이미지 겹침·목차 번호**를 직접 확인하세요."
 
 ## 금지
 - 손으로 HWPX/XML 작성 금지. `rch build-hwpx`만.

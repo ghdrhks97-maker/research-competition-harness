@@ -32,6 +32,7 @@
 - **연구 주제가 없으면** `brainstorm` 에이전트가 전공·트렌드·2022 핵심역량 기반 **주제 후보 3~4개를 제안**하고, 사용자가 고르거나 수정하게 한다. 제목도 후보를 제시해 확정. 주제·제목은 2022 개정 6대 핵심역량 중 하나 이상과 반드시 연계.
 - 양식 파일 경로가 있으면 `rch import-rules`. 확정 사항은 `input/ideas/`·`input/rules/competition-profile.json`에 기록.
 - 인터뷰 후 **보고서 계획을 요약해 승인**을 받는다(ralplan). 승인 전에는 Phase 1 이하를 시작하지 않는다.
+- **승인되면 `input/rules/competition-profile.json`에 `"plan_approved": true`를 기록하고 즉시 아래 autopilot 루프를 시작한다.** 이 승인이 마지막 질문이다 — 이후 단계에서 다시 허락을 구하지 않는다.
 상세 절차는 `.claude/skills/deep-interview/SKILL.md`.
 
 ### Phase 1 — 분석·리서치 (병렬)
@@ -55,6 +56,24 @@
 
 ### Phase 5 — 조립·렌더
 **`finalizer`** 지휘로 `rch assemble` → final 게이트(위 두 모드 중 해당하는 것, 통과 필수) → `rch build-hwpx` → `rch render-check`. 완료 시 `output/report.hwpx`와 남은 확인사항 제시(예상값 포함이면 `output/expected-claims.md` 교체 목록 안내), "한컴에서 최종 확인" 안내.
+
+## Autopilot 루프 (계획 승인 후 자동 발동 — 필수)
+
+계획 승인(Phase 0) 이후에는 **질문이나 검토 요청 없이 Phase 1→5를 연속 실행해 `output/report.hwpx`까지 완주**한다. 각 Phase 사이에 "계속할까요?"를 묻지 않는다. 루프 드라이버는 결정적 상태 머신 **`rch next <ws>`** 다:
+
+```
+반복:
+  rch next <ws>            # 다음 작업을 JSON으로 판정 (output/next-plan.json)
+  ├─ done=true            → 종료. 결과 보고(한컴 확인 안내 + expected-claims.md 교체 목록)
+  ├─ needs_user가 있으면   → 멈추고 사용자에게 그 항목만 질문
+  └─ 아니면 actions 실행    → kind=run은 rch 명령 실행, kind=delegate는 해당 lane을
+                             role의 서브에이전트로 위임(parallel=true면 동시에) → 다시 rch next
+```
+
+- **멈추는 조건은 딱 세 가지**: ① `needs_user`(계획 미승인, verdict `blocked` — 동의·개인정보·자료 확보 등 사용자만 풀 수 있는 문제), ② 개인정보/동의 위험 발견, ③ 같은 phase가 3회 반복 실패(원인과 함께 사용자 보고).
+- 그 외 품질 문제(critic 지적, check 오류, render 실패)는 사용자에게 묻지 말고 **해당 lane 재위임으로 스스로 해소**한다 — 그것이 Phase 4 루프다.
+- 서브에이전트가 판단이 어려운 문제를 만나면 verdict를 `blocked`+이유로 남긴다. autopilot이 그걸 `needs_user`로 승격해 사용자에게 묻는다. 사소한 선택은 blocked로 만들지 말고 보수적 기본값으로 스스로 결정한 뒤 lane-output에 기록한다.
+- `rch next`는 예상값(가상) claim이 있으면 final 게이트를 자동으로 `--allow-expected` 모드로 판정한다.
 
 ## 에이전트 역할 (13)
 
