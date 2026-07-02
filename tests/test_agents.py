@@ -13,6 +13,8 @@ def _clear_env() -> None:
     for key in list(os.environ):
         if key.startswith("RCH_AGENT_"):
             del os.environ[key]
+    for key in (agents.HOST_RUNTIME_ENV, agents.ALLOW_CROSS_AGENT_ENV):
+        os.environ.pop(key, None)
 
 
 class AgentPreflightTests(unittest.TestCase):
@@ -68,6 +70,9 @@ class AgentPreflightTests(unittest.TestCase):
 class AgentRunTests(unittest.TestCase):
     def setUp(self) -> None:
         _clear_env()
+        # The test process may itself run inside an agent app (e.g. Claude
+        # Code sets CLAUDECODE); pin detection off so cross-agent runs work.
+        os.environ[agents.HOST_RUNTIME_ENV] = "none"
 
     def tearDown(self) -> None:
         _clear_env()
@@ -95,6 +100,47 @@ class AgentRunTests(unittest.TestCase):
                 encoding="utf-8"
             )
             self.assertIn("STUB RESPONSE", response)
+
+    def test_detect_host_runtime_override(self) -> None:
+        os.environ[agents.HOST_RUNTIME_ENV] = "codex"
+        self.assertEqual(agents.detect_host_runtime(), "codex")
+        os.environ[agents.HOST_RUNTIME_ENV] = "none"
+        self.assertIsNone(agents.detect_host_runtime())
+
+    def test_cross_agent_run_is_refused_inside_another_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            prompt_dir = workspace / "prompts" / "codex"
+            prompt_dir.mkdir(parents=True)
+            (prompt_dir / "survey-analyzer.md").write_text("prompt", encoding="utf-8")
+            os.environ[agents.HOST_RUNTIME_ENV] = "claude"
+
+            result = agents.run_agent_on_lane(workspace, "codex", "survey-analyzer")
+            self.assertFalse(result.ok)
+            self.assertIn("사용량 격리", result.detail)
+            self.assertFalse((workspace / "lanes" / "survey-analyzer" / "codex" / "agent-response.md").exists())
+
+    def test_cross_agent_run_allowed_with_opt_in(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            prompt_dir = workspace / "prompts" / "codex"
+            prompt_dir.mkdir(parents=True)
+            (prompt_dir / "survey-analyzer.md").write_text("prompt", encoding="utf-8")
+
+            stub = workspace / "stub.sh"
+            stub.write_text(
+                '#!/bin/sh\nif [ "$1" = "auth-ok" ]; then exit 0; fi\necho "STUB RESPONSE"\n',
+                encoding="utf-8",
+            )
+            stub.chmod(0o755)
+            os.environ["RCH_AGENT_CODEX_BIN"] = str(stub)
+            os.environ["RCH_AGENT_CODEX_AUTH_ARGS"] = "auth-ok"
+            os.environ["RCH_AGENT_CODEX_RUN_ARGS"] = "run {prompt}"
+            os.environ[agents.HOST_RUNTIME_ENV] = "claude"
+            os.environ[agents.ALLOW_CROSS_AGENT_ENV] = "1"
+
+            result = agents.run_agent_on_lane(workspace, "codex", "survey-analyzer")
+            self.assertTrue(result.ok, result.detail)
 
     def test_run_blocks_when_unauthenticated(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -20,12 +20,12 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 ### 반드시 남길 것 (교체 가능하게)
 - `input/surveys/analysis/survey-summary.md` — 위 예상값 표. 최상단에 **"⚠️ 예상값(가상) — 실제 조사 후 교체 필요"** 배너.
 - `input/surveys/predicted-survey-template.csv` — 사용자가 실제 응답을 채울 **빈 템플릿**(헤더: `문항1_사전,문항1_사후,...`). 파일 안내 주석 포함.
-- lane 계약 파일 4종. 예상 수치 claim은 반드시 **`status: "placeholder"`**, notes에 "예상값. `rch import-survey`로 실제 CSV 넣으면 교체됨."
+- lane 계약 파일 4종. 예상 수치 claim은 반드시 **`status: "expected"`**, notes에 "예상값(가상). `rch import-survey`로 실제 CSV 넣으면 교체됨." (`expected`는 라벨이 있어야 `rch check`를 통과하고, final은 `--allow-expected`에서만 반영된다.)
 
 ## 교체 흐름 (사용자 안내)
 보고서에 이렇게 안내를 남긴다: "실제 설문을 받으면 `input/surveys/predicted-survey-template.csv`를 채워 `rch import-survey <ws> <파일>` 실행 → 예상값이 실제 통계(평균·효과크기·p값)로 자동 교체됩니다."
 
 ## 절대 금지
-- 예상값을 `real`/`derived`로 표시 금지. 항상 `placeholder` + "예상값(가상)" 라벨.
+- 예상값을 `real`/`derived`로 표시 금지. 항상 `expected` + "예상값(가상)" 라벨. (`placeholder`는 아직 못 채운 초안 구멍 전용 — 예상값에 쓰지 않는다.)
 - 예상값을 실제 조사 결과인 것처럼 서술 금지("측정되었다" X → "이 수업이 의도한 예상 변화" O).
 - 과장된 효과(예: 사전 1점대 → 사후 5점 만점) 금지. 보수적으로.

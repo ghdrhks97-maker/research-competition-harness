@@ -38,8 +38,13 @@ FINAL_OUTPUT_MAP = {
 }
 
 FINAL_FORBIDDEN = ("예정", "추후", "보완 예정", "초안", "미정", "TODO")
-CLAIM_STATUSES = {"real", "placeholder", "derived", "forbidden"}
+CLAIM_STATUSES = {"real", "placeholder", "derived", "expected", "forbidden"}
 FINAL_ALLOWED_STATUSES = {"real", "derived"}
+# "expected" claims are clearly-labeled 예상값(가상). They may enter a final
+# bundle only via `check --final --allow-expected`, and only when the claim
+# itself carries the label so a reader can never mistake it for real data.
+EXPECTED_LABEL_TOKENS = ("예상", "가상")
+EXPECTED_CLAIMS_REPORT = "expected-claims.md"
 FINAL_REQUIRED_LANES = frozenset(lane for lanes in FINAL_OUTPUT_MAP.values() for lane in lanes)
 UPSTREAM_REQUIRED_LANES = frozenset(
     (
@@ -186,9 +191,12 @@ def _collect_lane_outputs(workspace: Path, lane: str) -> tuple[list[str], list[d
     return parts, source_files
 
 
-def check_workspace(workspace: Path, final: bool = False) -> CheckResult:
+def check_workspace(
+    workspace: Path, final: bool = False, allow_expected: bool = False
+) -> CheckResult:
     errors: list[str] = []
     warnings: list[str] = []
+    expected_claims: list[dict[str, str]] = []
 
     if not workspace.exists():
         return CheckResult(False, [f"workspace missing: {workspace}"], [])
@@ -200,7 +208,7 @@ def check_workspace(workspace: Path, final: bool = False) -> CheckResult:
     for lane_dir in sorted(lanes_root.glob("*/*")) if lanes_root.exists() else []:
         if not lane_dir.is_dir():
             continue
-        _check_lane(lane_dir, errors, warnings, final)
+        _check_lane(lane_dir, errors, warnings, final, allow_expected, expected_claims)
 
     claim_files = list(workspace.glob("lanes/*/*/claim-ledger.json"))
     if not claim_files:
@@ -216,10 +224,35 @@ def check_workspace(workspace: Path, final: bool = False) -> CheckResult:
         json.dumps(result.to_dict(), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    if final and allow_expected:
+        _write_expected_claims_report(workspace, expected_claims)
     return result
 
 
-def _check_lane(lane_dir: Path, errors: list[str], warnings: list[str], final: bool) -> None:
+def _write_expected_claims_report(workspace: Path, expected_claims: list[dict[str, str]]) -> None:
+    lines = ["# 예상값(가상) 교체 목록", ""]
+    if expected_claims:
+        lines.append(
+            "아래 주장은 실제 조사 결과가 아니라 예상값(가상)이다. "
+            "실제 자료가 생기면 교체하고 `rch check --final`(플래그 없이)을 다시 통과시킨다."
+        )
+        lines += ["", "| Lane | 주장 | 교체 방법 |", "| --- | --- | --- |"]
+        for item in expected_claims:
+            lines.append(f"| {item['lane']} | {item['text']} | {item['notes'] or '실제 자료로 교체'} |")
+    else:
+        lines.append("남은 예상값(가상) 주장이 없다. 모든 주장이 실제 증거 기반이다.")
+    lines.append("")
+    (workspace / "output" / EXPECTED_CLAIMS_REPORT).write_text("\n".join(lines), encoding="utf-8")
+
+
+def _check_lane(
+    lane_dir: Path,
+    errors: list[str],
+    warnings: list[str],
+    final: bool,
+    allow_expected: bool = False,
+    expected_claims: list[dict[str, str]] | None = None,
+) -> None:
     required = ("lane-output.md", "lane-output.json", "claim-ledger.json", "verdict.json")
     missing = [name for name in required if not (lane_dir / name).exists()]
     if missing:
@@ -256,6 +289,7 @@ def _check_lane(lane_dir: Path, errors: list[str], warnings: list[str], final: b
         if final and forbidden in text:
             errors.append(f"{lane_dir}: final output contains forbidden marker: {forbidden}")
 
+    final_allowed = FINAL_ALLOWED_STATUSES | ({"expected"} if allow_expected else set())
     for index, claim in enumerate(claims):
         if not isinstance(claim, dict):
             errors.append(f"{lane_dir}: claim {index} must be object")
@@ -263,8 +297,32 @@ def _check_lane(lane_dir: Path, errors: list[str], warnings: list[str], final: b
         status = claim.get("status")
         if status not in CLAIM_STATUSES:
             errors.append(f"{lane_dir}: claim {index} has invalid status {status!r}")
-        if final and status not in FINAL_ALLOWED_STATUSES:
-            errors.append(f"{lane_dir}: final claim {index} not allowed: {status}")
+        if status == "expected":
+            label_source = f"{claim.get('text', '')} {claim.get('notes', '')}"
+            if not any(token in label_source for token in EXPECTED_LABEL_TOKENS):
+                errors.append(
+                    f"{lane_dir}: expected claim {index} must carry an "
+                    f"'예상값(가상)' label in text or notes"
+                )
+        if final and status not in final_allowed:
+            hint = (
+                " (예상값 완성본은 --allow-expected로 검사)"
+                if status == "expected" and not allow_expected
+                else ""
+            )
+            errors.append(f"{lane_dir}: final claim {index} not allowed: {status}{hint}")
+        if final and allow_expected and status == "expected":
+            warnings.append(
+                f"{lane_dir}: claim {index} is expected(가상) — replace with real data when available"
+            )
+            if expected_claims is not None:
+                expected_claims.append(
+                    {
+                        "lane": lane_dir.parent.name,
+                        "text": str(claim.get("text", "")),
+                        "notes": str(claim.get("notes", "")),
+                    }
+                )
         if not claim.get("text"):
             errors.append(f"{lane_dir}: claim {index} missing text")
         evidence = claim.get("evidence")
@@ -1064,6 +1122,11 @@ def main(argv: list[str] | None = None) -> int:
     check_p = sub.add_parser("check", help="validate lane contracts and claim ledger")
     check_p.add_argument("workspace")
     check_p.add_argument("--final", action="store_true", help="enforce final-candidate rules")
+    check_p.add_argument(
+        "--allow-expected",
+        action="store_true",
+        help="final에서 라벨링된 예상값(status=expected) 주장을 허용 (교체 목록을 output/expected-claims.md에 기록)",
+    )
 
     survey_p = sub.add_parser("import-survey", help="analyze a pre/post survey CSV/TSV/XLSX")
     survey_p.add_argument("workspace")
@@ -1172,7 +1235,9 @@ def main(argv: list[str] | None = None) -> int:
         assemble_workspace(Path(args.workspace))
         return 0
     if args.cmd == "check":
-        result = check_workspace(Path(args.workspace), final=args.final)
+        result = check_workspace(
+            Path(args.workspace), final=args.final, allow_expected=args.allow_expected
+        )
         print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
         return 0 if result.ok else 1
     if args.cmd == "import-survey":

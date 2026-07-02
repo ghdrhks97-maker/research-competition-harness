@@ -155,7 +155,9 @@ Claude Code는 이들을 서브에이전트로 자동 스폰(병렬), Antigravit
 
 ### 사용량
 
-LLM 작업(집필·추론)은 **구동하는 런타임의 사용량**만 씁니다(Antigravity→Antigravity, Codex→Codex, Claude Code→Claude). `rch`의 결정적 명령(통계·렌더·검증)과 `research-background`(공개 API)는 **AI 사용량을 쓰지 않습니다.** 예외로 `rch agents run`/`run-lanes --execute`는 **다른** 에이전트 CLI를 불러내 그쪽 사용량을 씁니다(교차 호출을 원치 않으면 쓰지 않으면 됩니다).
+LLM 작업(집필·추론)은 **구동하는 런타임의 사용량**만 씁니다(Antigravity→Antigravity, Codex→Codex, Claude Code→Claude). 서브에이전트도 구동 런타임의 방식으로만 스폰합니다. `rch`의 결정적 명령(통계·렌더·검증)과 `research-background`(공개 API)는 **AI 사용량을 쓰지 않습니다.**
+
+`rch agents run`/`run-lanes --execute`는 다른 에이전트 CLI를 교차 호출하는 명령이지만, 하네스가 구동 런타임(Claude Code/Codex/Antigravity)을 감지하면 **다른 CLI 호출을 기본 차단**합니다. 정말 교차 호출하려면 `RCH_ALLOW_CROSS_AGENT=1`을 명시해야 하며, 런타임 감지를 바로잡으려면 `RCH_HOST_RUNTIME=claude|codex|antigravity|none`으로 지정할 수 있습니다.
 
 ## 시작: 브레인스토밍으로 주제·제목 자동 생성
 
@@ -368,8 +370,11 @@ lanes/<lane>/<agent>/
 | --- | --- | --- |
 | `real` | 실제 증빙으로 직접 확인 | 가능 |
 | `derived` | 실제 증빙에서 계산/도출, 방법 기록 | 가능 |
-| `placeholder` | 초안용 자리표시자 | 불가 |
+| `expected` | "예상값(가상)" 라벨이 붙은 예상 결과(설문 미실시 등) | `check --final --allow-expected`에서만 가능 |
+| `placeholder` | 초안용 자리표시자(아직 못 채운 구멍) | 불가 |
 | `forbidden` | 보고서 반영 금지 | 불가 |
+
+`expected` claim은 text/notes에 "예상"/"가상" 라벨이 없으면 `check`가 거부합니다. `--allow-expected`로 final을 통과하면 교체 목록이 `output/expected-claims.md`에 남고, 실제 자료가 생기면 교체 후 플래그 없는 `check --final`로 재검증합니다.
 
 ## 추천 운영 흐름
 
@@ -419,6 +424,7 @@ output/bundle-manifest.json
 - final claim evidence는 workspace-relative path여야 합니다.
 - final claim evidence는 `input/raw_private/`를 직접 가리킬 수 없습니다.
 - critic `rubric-score.json`은 5개 이상 criterion과 85% 이상 총점을 가져야 합니다.
+- 기본은 `real`/`derived` claim만 허용. **설문 미실시 등으로 예상값(가상)을 넣은 완성본은 `--allow-expected`를 붙여** 라벨링된 `expected` claim까지 허용합니다(`placeholder`는 계속 차단).
 
 ## 금지선
 
