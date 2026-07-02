@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 
+from rch.cli import assemble_workspace
 from rch.cli import main
 from rch.hwpx import build_hwpx
+from rch.lane_specs import LANE_SPECS
 from rch.render_check import render_check
 
 
@@ -210,6 +213,49 @@ def _rich_body(chars: int = 9000) -> str:
     return "\n".join(body)
 
 
+def _write_passing_lane(workspace: Path, lane: str, text: str | None = None) -> None:
+    lane_dir = workspace / "lanes" / lane / "test"
+    lane_dir.mkdir(parents=True, exist_ok=True)
+    body = text or f"# {LANE_SPECS[lane]['title']}\n\n{lane} 산출물은 최종 후보 기준을 충족한다.\n"
+    (lane_dir / "lane-output.md").write_text(body, encoding="utf-8")
+    (lane_dir / "lane-output.json").write_text(
+        json.dumps({"lane": lane, "summary": "pass"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (lane_dir / "claim-ledger.json").write_text(
+        json.dumps({"claims": []}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (lane_dir / "verdict.json").write_text(
+        json.dumps({"status": "pass", "reason": "test fixture"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    if lane == "critic":
+        items = [
+            {
+                "criterion": f"criterion-{index}",
+                "score": 18,
+                "max_score": 20,
+                "evidence": "lane-output.md",
+                "risk": "none",
+                "fix": "none",
+            }
+            for index in range(1, 6)
+        ]
+        (lane_dir / "rubric-score.json").write_text(
+            json.dumps({"total_score": 90, "max_score": 100, "items": items}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+
+def _workspace_with_final_bundle(tmp: str, report_body: str) -> Path:
+    workspace = Path(tmp) / "ws"
+    for lane in LANE_SPECS:
+        _write_passing_lane(workspace, lane, report_body if lane == "draft-writer" else None)
+    assemble_workspace(workspace)
+    return workspace
+
+
 class BuildGateTests(unittest.TestCase):
     def _workspace_with_bundle(self, tmp: str, text: str) -> Path:
         workspace = Path(tmp) / "ws"
@@ -235,7 +281,7 @@ class BuildGateTests(unittest.TestCase):
 
     def test_gate_allows_complete_body_and_force_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            workspace = self._workspace_with_bundle(tmp, _rich_body())
+            workspace = _workspace_with_final_bundle(tmp, _rich_body())
             code = main(["build-hwpx", str(workspace)])
             self.assertEqual(code, 0)
             self.assertTrue((workspace / "output" / "report.hwpx").exists())
@@ -252,9 +298,7 @@ class KordocEngineTests(unittest.TestCase):
 
     def test_build_hwpx_kordoc_engine_uses_configured_command(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            workspace = Path(tmp) / "ws"
-            (workspace / "output").mkdir(parents=True)
-            (workspace / "output" / "report-draft.md").write_text(_rich_body(), encoding="utf-8")
+            workspace = _workspace_with_final_bundle(tmp, _rich_body())
 
             stub = Path(tmp) / "kordoc-stub.sh"
             stub.write_text(
@@ -277,9 +321,7 @@ class KordocEngineTests(unittest.TestCase):
 
     def test_build_hwpx_kordoc_engine_fails_clearly_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            workspace = Path(tmp) / "ws"
-            (workspace / "output").mkdir(parents=True)
-            (workspace / "output" / "report-draft.md").write_text(_rich_body(), encoding="utf-8")
+            workspace = _workspace_with_final_bundle(tmp, _rich_body())
             os.environ["RCH_KORDOC_CMD"] = "/nonexistent/kordoc-binary-xyz"
 
             with self.assertRaises(SystemExit) as ctx:

@@ -725,6 +725,24 @@ def build_hwpx_cmd(
         )
     if findings:
         print("경고(--force 빌드): " + " | ".join(findings), file=sys.stderr)
+    allow_expected = pipeline_mod.has_expected_claims(workspace)
+    final_check = check_workspace(workspace, final=True, allow_expected=allow_expected)
+    if not final_check.ok and not force:
+        shown = final_check.errors[:12]
+        suffix = "" if len(final_check.errors) <= len(shown) else f"\n- ... 외 {len(final_check.errors) - len(shown)}건"
+        raise SystemExit(
+            "빌드 거부 — final gate가 통과하지 않았습니다:\n- "
+            + "\n- ".join(shown)
+            + suffix
+            + "\n먼저 rch next/revise-loop로 lane 산출물·claim-ledger·금지어를 고치세요. "
+            "중간 확인용 강제 빌드는 --force."
+        )
+    if not final_check.ok:
+        print(
+            "경고(--force 빌드): final gate 실패 — "
+            + " | ".join(final_check.errors[:8]),
+            file=sys.stderr,
+        )
     target = output_path or (output_dir / "report.hwpx")
     if engine == "kordoc":
         _build_hwpx_kordoc(workspace, existing, target)
@@ -823,6 +841,11 @@ def diagnose_cmd(workspace: Path) -> int:
             signals.append(
                 "bundle-manifest의 source lane이 harness-*(파이썬 생성기)입니다 — 에이전트 lane 산출물이 아닙니다."
             )
+    bundle_paths = [output_dir / name for name in FINAL_BUNDLE_FILES if name != "finalization-checklist.md"]
+    existing_bundle_paths = [path for path in bundle_paths if path.exists()]
+    if existing_bundle_paths:
+        for finding in _build_quality_gate(existing_bundle_paths):
+            signals.append(f"build gate: {finding}")
 
     # 2. Bundle / lanes state.
     if not (output_dir / "bundle-manifest.json").exists():
@@ -851,6 +874,18 @@ def diagnose_cmd(workspace: Path) -> int:
     if counts["placeholder"] > 0:
         signals.append(f"placeholder claim {counts['placeholder']}건 — 최종 반영 불가 상태의 자리표시자가 남아 있습니다.")
 
+    allow_expected = pipeline_mod_local.has_expected_claims(workspace)
+    final_result = check_workspace(workspace, final=True, allow_expected=allow_expected)
+    info["final_check"] = final_result.to_dict()
+    if not final_result.ok:
+        shown = final_result.errors[:8]
+        extra = len(final_result.errors) - len(shown)
+        signals.append(
+            "final gate 실패 — "
+            + " / ".join(shown)
+            + (f" / ... 외 {extra}건" if extra > 0 else "")
+        )
+
     # 4. HWPX inspection.
     hwpx_path = output_dir / "report.hwpx"
     if not hwpx_path.exists():
@@ -872,6 +907,11 @@ def diagnose_cmd(workspace: Path) -> int:
         check = render_check_mod.render_check(hwpx_path, toc_path=toc_path if toc_path.exists() else None)
         info["render_check"] = check.to_dict()
         signals.extend(f"render-check: {err}" for err in check.errors)
+        estimated_pages = getattr(check, "estimated_pages", 0)
+        if estimated_pages and estimated_pages < 20:
+            signals.append(
+                f"분량 과소: render-check 추정 {estimated_pages}쪽 — 연구대회 최종 보고서 수준이 아니라 요약 골격입니다."
+            )
 
     if not signals:
         signals.append("결정적 문제 신호 없음 — 한컴 화면 캡처와 함께 output/diagnose.json을 공유하면 더 파고들 수 있습니다.")
@@ -1349,6 +1389,11 @@ def main(argv: list[str] | None = None) -> int:
         help="레거시 골격 생성 확인 플래그. 없으면 실행 거부(완성 보고서는 autopilot 사용)",
     )
 
+    agent_harness_p = sub.add_parser("agent-harness", help="build a reusable conductor pack for agent apps")
+    agent_harness_p.add_argument("workspace")
+    agent_harness_p.add_argument("--agent", action="append", default=[], help="agent app name; repeatable")
+    agent_harness_p.add_argument("--offline-research", action="store_true", help="prefer offline-safe research commands")
+
     lane_p = sub.add_parser("lane", help="create lane inbox for an agent")
     lane_p.add_argument("workspace")
     lane_p.add_argument("lane", choices=LANES)
@@ -1517,6 +1562,16 @@ def main(argv: list[str] | None = None) -> int:
             args.photo_count,
             args.skip_hwpx,
         )
+        return 0
+    if args.cmd == "agent-harness":
+        from rch import agent_harness as agent_harness_mod
+
+        result = agent_harness_mod.generate_agent_harness(
+            Path(args.workspace),
+            agents=tuple(args.agent or ["codex"]),
+            offline_research=args.offline_research,
+        )
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
         return 0
     if args.cmd == "lane":
         create_lane(Path(args.workspace), args.lane, args.agent)

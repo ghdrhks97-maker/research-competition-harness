@@ -165,6 +165,19 @@ def op_build_hwpx(workspace: str, output: str | None = None, force: bool = False
             "findings": findings,
             "reason": "번들이 아직 완성 상태가 아닙니다. 해당 lane을 보강한 뒤 assemble → build_hwpx를 다시 호출하세요. (중간 확인용은 force=true)",
         }
+    allow_expected = pipeline_mod.has_expected_claims(path)
+    final_check = check_workspace(path, final=True, allow_expected=allow_expected)
+    if not final_check.ok and not force:
+        return {
+            "ok": False,
+            "refused": True,
+            "final_gate": final_check.to_dict(),
+            "reason": (
+                "final gate가 통과하지 않았습니다. lane 산출물·claim-ledger·금지어를 고친 뒤 "
+                "assemble → check(final) → build_hwpx 순서로 다시 호출하세요. "
+                "중간 확인용은 force=true."
+            ),
+        }
     target = Path(output).expanduser() if output else output_dir / "report.hwpx"
     result = hwpx_mod.build_hwpx_from_bundle(bundle, target, images_root=path)
     return {
@@ -233,11 +246,31 @@ def op_go(
     )
 
 
+def op_agent_harness(workspace: str, agents: str = "codex", offline_research: bool = False) -> dict[str, Any]:
+    from rch import agent_harness as agent_harness_mod
+
+    path = _ws(workspace)
+    selected_agents = tuple(_split_tokens(agents) or ["codex"])
+    result = agent_harness_mod.generate_agent_harness(
+        path,
+        agents=selected_agents,
+        offline_research=offline_research,
+    )
+    return result.to_dict()
+
+
 def _split_paths(value: str) -> list[Path]:
     if not value:
         return []
     raw = value.replace("\n", ",").replace(";", ",").split(",")
     return [Path(item.strip()).expanduser() for item in raw if item.strip()]
+
+
+def _split_tokens(value: str) -> list[str]:
+    if not value:
+        return []
+    raw = value.replace("\n", ",").replace(";", ",").split(",")
+    return [item.strip() for item in raw if item.strip()]
 
 
 def build_server() -> Any:
@@ -252,7 +285,7 @@ def build_server() -> Any:
     app = FastMCP("rch", instructions=(
         "한국 연구대회 보고서 제작 하네스(에이전트 우선). 판단·리서치·집필·비평은 전부 "
         "당신(에이전트)이 AGENTS.md의 역할 정의대로 직접 수행하고, 이 서버의 도구는 결정적 작업에만 쓴다: "
-        "init(골격)·import_rules(양식 저장)·import_survey(설문 통계)·next(다음 작업 판정 루프)·"
+        "init(골격)·agent_harness(지휘 pack)·import_rules(양식 저장)·import_survey(설문 통계)·next(다음 작업 판정 루프)·"
         "check(검증 게이트)·assemble(조립)·build_hwpx(렌더)·render_check(렌더 검증)·revise_loop(수정 백로그)·"
         "diagnose(산출물 검진). 흐름: deep-interview(대화) → 계획 승인 → next를 반복 호출해 done까지. "
         "경고: go/brainstorm/draft/mine_references/research_background/import_photos는 레거시 파이썬 "
@@ -315,6 +348,11 @@ def build_server() -> Any:
     def init(workspace: str) -> dict[str, Any]:
         """새 대회 작업공간을 생성한다."""
         return op_init(workspace)
+
+    @app.tool()
+    def agent_harness(workspace: str, agents: str = "codex", offline_research: bool = False) -> dict[str, Any]:
+        """Codex/Claude/AGY 같은 에이전트 앱이 다음 연구대회를 지휘하도록 conductor pack을 만든다."""
+        return op_agent_harness(workspace, agents=agents, offline_research=offline_research)
 
     @app.tool()
     def brainstorm(
@@ -387,8 +425,7 @@ def build_server() -> Any:
 
     @app.tool()
     def build_hwpx(workspace: str, output: str = "", force: bool = False) -> dict[str, Any]:
-        """조립된 번들을 HWPX(OWPML) 파일로 렌더한다. 품질 게이트(미완성 마커·최소 분량)
-        실패 시 거부하며, 중간 확인용 강제 빌드만 force=true."""
+        """조립된 번들을 HWPX(OWPML)로 렌더한다. final gate와 품질 게이트 실패 시 거부한다."""
         return op_build_hwpx(workspace, output or None, force=force)
 
     @app.tool()
