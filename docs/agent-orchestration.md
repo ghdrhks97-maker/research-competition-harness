@@ -41,7 +41,7 @@ GEMINI.md                              # AGENTS.md 포인터
 
 ## 파이프라인
 
-**`deep-interview`(대화형 인터뷰: 한 번에 하나씩 승인창으로 대회·대상·교과·주제·제목 확정, 주제 없으면 `brainstorm`이 후보 제안 → 계획 승인)** → **[병렬]** `reference-miner`·`background-researcher`·`photo-curator`·`evidence-curator`·`survey-analyst`(+`rch import-survey`) → `draft-writer` → `table-layout`→`summary-sheet`/`toc-builder`/`appendix-builder` → `critic`+`rch check`/`revise-loop` → `finalizer`+`rch assemble`/`build-hwpx`/`render-check`.
+**`deep-interview`(대화형 인터뷰: 한 번에 하나씩 승인창으로 대회·대상·교과·주제·제목 확정, 주제 없으면 `brainstorm`이 후보 제안 → 계획 승인)** → **[병렬]** `reference-miner`·`background-researcher`·`photo-curator`·`evidence-curator`·`survey-analyst`(+`rch import-survey`) → `draft-writer` → `table-layout`→`summary-sheet`/`toc-builder`/`appendix-builder` → `critic`+`rch check`/`revise-loop` → `finalizer`+`rch assemble`/`build-hwpx`/`render-check`/`visual-check`.
 
 승인 전에는 본문 생성을 시작하지 않는다(가재코드 deep-interview → ralplan → 실행 패턴).
 

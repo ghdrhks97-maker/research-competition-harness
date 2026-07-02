@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from rch import mcp_server
+from rch.render_check import render_check
 
 
 class McpOpsTests(unittest.TestCase):
@@ -96,6 +97,8 @@ class McpOpsTests(unittest.TestCase):
             root = Path(workspace)
             self.assertIn("build-hwpx", result["steps"])
             self.assertTrue((root / "output" / "report.hwpx").exists())
+            rendered = render_check(root / "output" / "report.hwpx")
+            self.assertEqual(rendered.section_count, 5)
             self.assertTrue(result["missing_inputs"])
             self.assertTrue((root / "input" / "surveys" / "analysis" / "survey-summary.md").exists())
             self.assertTrue((root / "input" / "photos" / "analysis" / "photo-manifest.json").exists())

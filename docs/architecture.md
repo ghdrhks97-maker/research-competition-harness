@@ -25,8 +25,9 @@ It now also ships a generation engine, a render engine, and a quality loop:
 - `import-photos`: photo manifest + privacy checklist (safe-by-default `unreviewed`, blur instructions, body/summary/appendix/exclude placement).
 - `mine-references`: structure-only extraction (outline, table density, appendix pattern) from `.md`/`.txt`/`.hwpx` references.
 - `draft`: composes I~V body, summary, TOC, and appendix drafts from the analyses into the writing lanes with claim tags.
-- `build-hwpx`: renders only a final-gate-passing assembled markdown bundle into an OWPML `.hwpx` container (headings, paragraphs, GFM tables, TOC, image embedding). `--force` is for diagnostic builds only and writes preview output, not `output/report.hwpx`.
-- `render-check`: validates the `.hwpx` zip/OWPML structure, XML well-formedness, page estimate, table integrity, and TOC-vs-body heading match.
+- `build-hwpx`: renders only a final-gate-passing assembled markdown bundle into an OWPML `.hwpx` container. Builtin output is a five-section report package: cover, summary, TOC, body, appendix. `--force` is for diagnostic builds only and writes preview output, not `output/report.hwpx`.
+- `render-check`: validates every `Contents/section*.xml`, OWPML zip structure, XML well-formedness, section page definitions, page estimate, table integrity, TOC-vs-body heading match, underfill, and table-heavy skeleton signals.
+- `visual-check`: optionally renders the HWPX through RHWP/Hancom-compatible tooling (`RCH_RHWP_RENDER`) and writes PDF/page evidence plus coverage metrics.
 - `revise-loop`: merges critic, check, and render-check feedback into one prioritized revision backlog.
 - `run-lanes`: builds per-lane prompt bundles for external agents (Codex/Antigravity/Claude); `--execute` verifies login then dispatches.
 - `agents preflight` / `agents run`: actually shell out to the external agent CLIs to confirm install, verify login by real process exit code, and dispatch lane prompts. Binaries and version/auth/run args are configurable via `RCH_AGENT_<NAME>_*` env vars.
@@ -75,7 +76,8 @@ PYTHONPATH=src python3 -m rch.cli draft <workspace>
 PYTHONPATH=src python3 -m rch.cli assemble <workspace>
 PYTHONPATH=src python3 -m rch.cli check <workspace> --final
 PYTHONPATH=src python3 -m rch.cli build-hwpx <workspace>
-PYTHONPATH=src python3 -m rch.cli render-check <workspace>
+PYTHONPATH=src python3 -m rch.cli render-check <workspace> --page-limit 25 --min-pages 22
+PYTHONPATH=src python3 -m rch.cli visual-check <workspace>
 PYTHONPATH=src python3 -m rch.cli revise-loop <workspace>
 ```
 
@@ -106,7 +108,7 @@ PYTHONPATH=src python3 -m rch.cli revise-loop <workspace>
 6. Draft/table/summary consistency gate.
 7. Critic rubric-score gate: at least 5 criteria, evidence/risk/fix per criterion, 85% minimum final target.
 8. Bundle assembly gate.
-9. HWPX/Hancom render gate, performed outside this CLI until direct HWPX integration exists.
+9. HWPX/Hancom render gate: `build-hwpx` creates multi-section HWPX, `render-check` validates structure/page/table/TOC, `visual-check` records PDF/page evidence when a renderer is available, then Hancom/HOP remains final visual authority.
 
 ## Hard Safety Rules
 

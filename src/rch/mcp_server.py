@@ -29,6 +29,7 @@ from rch import render_check as render_check_mod
 from rch import revise as revise_mod
 from rch import rules as rules_mod
 from rch import survey as survey_mod
+from rch import visual_check as visual_check_mod
 from rch.cli import assemble_workspace, check_workspace, go_workspace, init_workspace
 from rch.lane_specs import FINAL_BUNDLE_FILES
 
@@ -190,9 +191,11 @@ def op_build_hwpx(workspace: str, output: str | None = None, force: bool = False
                 f"중간 확인은 output/{FORCE_PREVIEW_HWPX} 같은 preview 파일명을 쓰세요."
             ),
         }
-    result = hwpx_mod.build_hwpx_from_bundle(bundle, target, images_root=path)
+    result = hwpx_mod.build_research_report_hwpx(path, target, images_root=path, preview=preview_build)
     response = {
         "hwpx": str(target),
+        "sections": result.section_count,
+        "section_files": result.section_files,
         "paragraphs": result.paragraph_count,
         "tables": result.table_count,
         "headings": result.heading_count,
@@ -212,6 +215,16 @@ def op_render_check(workspace: str, hwpx: str | None = None, page_limit: int = 2
     check = render_check_mod.run_render_check(
         target, path / "output", toc_path=toc_path if toc_path.exists() else None, page_limit=page_limit
     )
+    return check.to_dict()
+
+
+def op_visual_check(workspace: str, hwpx: str | None = None, renderer: str | None = None) -> dict[str, Any]:
+    path = _ws(workspace)
+    output_dir = path / "output"
+    target = Path(hwpx).expanduser() if hwpx else output_dir / "report.hwpx"
+    if not target.exists() and (output_dir / "report-preview.hwpx").exists():
+        target = output_dir / "report-preview.hwpx"
+    check = visual_check_mod.run_visual_check(target, output_dir, renderer=renderer or None)
     return check.to_dict()
 
 
@@ -447,6 +460,10 @@ def build_server() -> Any:
     def render_check(workspace: str, hwpx: str = "", page_limit: int = 25) -> dict[str, Any]:
         """HWPX 구조·페이지 추정·목차 일치·표 무결성을 검증한다."""
         return op_render_check(workspace, hwpx or None, page_limit=page_limit)
+
+    @app.tool()
+    def visual_check(workspace: str, hwpx: str = "", renderer: str = "") -> dict[str, Any]:
+        return op_visual_check(workspace, hwpx or None, renderer or None)
 
     @app.tool()
     def revise_loop(workspace: str) -> dict[str, Any]:

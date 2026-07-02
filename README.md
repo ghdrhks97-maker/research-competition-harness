@@ -44,8 +44,9 @@
 | `rch agents preflight <ws>` | Codex/Antigravity/Claude CLI 설치·로그인 자동 확인 | `output/agent-preflight.{json,md}` |
 | `rch agents run <ws> <agent> --lanes ...` | 프롬프트를 에이전트 CLI로 실제 호출해 응답 수집 | `lanes/<lane>/<agent>/agent-response.md` |
 | `rch render-icons <ws>` | icon-artist가 설계한 `icon-spec.json`을 실제 PNG 아이콘으로 렌더(의존성 0) | `input/icons/rendered/` |
-| `rch build-hwpx <ws>` | `check --final` 통과 bundle만 HWPX로 렌더. `--force` 중간 확인본은 `output/report-preview.hwpx`로만 저장 | `output/report.hwpx` |
-| `rch render-check <ws>` | HWPX 구조·XML·페이지 추정·목차-본문 일치·표 무결성 검증. `--page-limit`(상한)·`--min-pages`(하한, 규정 분량 채움 검사) | `output/render-check.{json,md}` |
+| `rch build-hwpx <ws>` | `check --final` 통과 bundle만 표지·요약·목차·본문·부록 5-section HWPX로 렌더. `--force` 중간 확인본은 `output/report-preview.hwpx`로만 저장 | `output/report.hwpx` |
+| `rch render-check <ws>` | 전체 section XML·페이지 추정·목차-본문 일치·표 무결성·분량/표 과다 신호 검증. `--page-limit`(상한)·`--min-pages`(하한) | `output/render-check.{json,md}` |
+| `rch visual-check <ws>` | RHWP/Hancom 호환 렌더러로 PDF·페이지 이미지·coverage metrics 생성. `RCH_RHWP_RENDER` 또는 로컬 rhwp helper 사용 | `output/visual-check.{json,md}`, `output/visual-check.pdf` |
 | `rch revise-loop <ws>` | critic·check·render-check 피드백을 우선순위 수정 백로그로 통합 | `output/revision-tasks.{json,md}` |
 | `rch diagnose <ws>` | 보고서가 이상하게 나왔을 때 output 폴더를 검진(레거시 go 흔적·표 크기 누락·lane 미실행·placeholder 잔존) | `output/diagnose.{json,md}` |
 
@@ -73,6 +74,8 @@ rch next <workspace>
 
 `--force` 중간 확인본은 항상 `output/report-preview.hwpx`에만 저장됩니다. `output/report.hwpx`는 final gate와 build gate를 통과한 bundle에서만 만들어져야 합니다.
 
+`render-check.json`에서 `section_count < 4`, `estimated_pages < 20`, 표 과다 경고가 뜨면 예전처럼 한 섹션짜리 표 중심 골격이거나 본문 밀도 부족입니다. 이때는 HWPX를 손으로 고치지 말고 원본 lane을 보강한 뒤 `assemble → build-hwpx → render-check`를 다시 돕니다.
+
 `rch next`가 `revise`를 반환하면 `rch revise-loop <workspace>`를 실행한 뒤 critic, draft, finalizer lane을 다시 돌립니다. placeholder/expected claim, `초안`, missing finalizer source, `claim-ledger.json` 오류가 남아 있으면 `rch build-hwpx`는 최종본을 만들지 않습니다.
 
 세부 단계 직접 실행:
@@ -91,7 +94,8 @@ rch draft 2026-competition
 rch assemble 2026-competition
 rch check 2026-competition --final
 rch build-hwpx 2026-competition
-rch render-check 2026-competition
+rch render-check 2026-competition --page-limit 25 --min-pages 22
+rch visual-check 2026-competition
 rch revise-loop 2026-competition
 ```
 
@@ -148,7 +152,7 @@ pip install -e ".[mcp]"     # rch + rch-mcp(MCP 서버) 설치
 
 ### 파이프라인 (의존성 = 병렬 그룹)
 
-인터뷰 → `brainstorm` → **[병렬]** `reference-miner`·`background-researcher`·`photo-curator`·`evidence-curator`·`survey-analyst`(+`rch import-survey`) → `draft-writer` → `table-layout`→`summary-sheet`/`toc-builder`/`appendix-builder` → `critic`+`rch check`/`revise-loop` → `finalizer`+`rch assemble`/`build-hwpx`/`render-check`. 상세는 [`AGENTS.md`](AGENTS.md), [`docs/agent-orchestration.md`](docs/agent-orchestration.md).
+인터뷰 → `brainstorm` → **[병렬]** `reference-miner`·`background-researcher`·`photo-curator`·`evidence-curator`·`survey-analyst`(+`rch import-survey`) → `draft-writer` → `table-layout`→`summary-sheet`/`toc-builder`/`appendix-builder` → `critic`+`rch check`/`revise-loop` → `finalizer`+`rch assemble`/`build-hwpx`/`render-check`/`visual-check`. 상세는 [`AGENTS.md`](AGENTS.md), [`docs/agent-orchestration.md`](docs/agent-orchestration.md).
 
 ### Autopilot: 계획 승인 후에는 질문 없이 완주
 
@@ -313,9 +317,19 @@ CLI마다 하위 명령이 달라 각 에이전트의 실행 명령을 환경변
 
 1. **대회 공식 양식 채우기** — `input/rules/forms/*.hwpx`가 있고 [kordoc](https://github.com/chrisryugj/kordoc)이 설치돼 있으면 `npx -y kordoc fill 양식.hwpx -j values.json -o output/report.hwpx` (원본 서식 100% 유지)
 2. **kordoc 보고서 프리셋** — `rch build-hwpx <ws> --engine kordoc` (내부에서 `npx -y kordoc generate ... --preset 보고서` 실행, `RCH_KORDOC_CMD`로 명령 조정)
-3. **빌트인** — `rch build-hwpx <ws>` (의존성 없음, 항상 유효한 HWPX)
+3. **빌트인** — `rch build-hwpx <ws>` (의존성 없음, 표지·요약·목차·본문·부록 5-section HWPX)
 
-어느 경로든 `rch render-check`로 검증합니다.
+어느 경로든 `rch render-check --page-limit <상한> --min-pages <하한>`로 검증합니다. `RCH_RHWP_RENDER`를 설정했거나 로컬 rhwp helper가 있으면 `rch visual-check <ws>`까지 실행해 PDF·페이지 이미지·coverage metrics를 남깁니다.
+
+### HWPX 품질 루프
+
+예전 `연구대회_자동화`에서 안정적이었던 흐름을 하네스 기본값으로 넣었습니다:
+
+1. `build-hwpx`는 단일 `section0.xml` 덤프가 아니라 표지·요약·목차·본문·부록을 분리한 다중 section 패키지를 만든다.
+2. `render-check`는 모든 `Contents/section*.xml`을 열어 XML, `hp:pagePr`, 표 `rowCnt/colCnt`, 목차 제목, 추정 페이지, 표 과다 신호를 본다.
+3. `diagnose`는 `report.hwpx`와 `report-preview.hwpx`를 구분하고 final gate 실패·preview only·구버전 단일 section 산출물을 잡는다.
+4. `visual-check`는 가능한 경우 RHWP/HOP 계열 렌더로 PDF와 페이지 이미지를 만들고, underfilled/thin page metrics를 기록한다.
+5. 최종 완료 기준은 `check --final` 통과, `build-hwpx` 최종본 생성, `render-check ok:true`, visual evidence 또는 Hancom/HOP 수동 확인이다.
 
 ### 디자인 반복 루프 (hwpx-designer)
 
@@ -323,8 +337,9 @@ CLI마다 하위 명령이 달라 각 에이전트의 실행 명령을 환경변
 
 ```bash
 rch hwpx-unpack <ws>    # output/report.hwpx → output/hwpx-src/ (XML 편집 가능)
-# Contents/header.xml·section0.xml 편집 (에이전트)
+# Contents/header.xml·section*.xml 편집 (에이전트)
 rch hwpx-pack <ws>      # 재조립(mimetype 규칙 준수) + render-check 자동 실행
+rch visual-check <ws>   # 가능하면 PDF/페이지 metrics 확인
 ```
 
 pack이 검증에 실패하면 그 편집은 폐기하고 더 작은 단위로 재시도합니다. 반복본은 `output/iterations/report_v<NN>.hwpx`로 쌓입니다. 본문 마크다운 단계에서도 `:::box 제목` ... `:::` 지시문으로 색 박스를, ▶ ◆ ■ 글리프로 아이콘 리듬을 쓸 수 있고, 장 제목(H1)은 자동으로 액센트 도비라 바로 렌더됩니다.

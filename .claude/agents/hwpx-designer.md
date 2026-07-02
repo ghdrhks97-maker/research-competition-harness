@@ -12,8 +12,9 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 
 ```
 rch hwpx-unpack <ws>                      # output/report.hwpx → output/hwpx-src/
-# output/hwpx-src/Contents/header.xml, section0.xml 을 자유롭게 편집
+# output/hwpx-src/Contents/header.xml, section*.xml 을 자유롭게 편집
 rch hwpx-pack <ws>                        # 재조립 + render-check 자동 실행
+rch visual-check <ws>                     # 가능하면 PDF/page metrics 확인
 cp output/report.hwpx output/iterations/report_v<NN>.hwpx   # 반복본 보존
 ```
 
@@ -32,19 +33,19 @@ cp output/report.hwpx output/iterations/report_v<NN>.hwpx   # 반복본 보존
 ## OWPML 편집 시 주의 (깨짐 방지)
 
 - 새 `charPr`/`paraPr`/`borderFill`을 쓰려면 **header.xml에 정의를 추가하고 itemCnt를 갱신**한 뒤 section0.xml에서 참조한다. 정의 없는 id 참조가 한컴 깨짐의 최대 원인.
-- 첫 문단의 `hp:secPr`(페이지 정의)은 절대 건드리지 않는다.
+- 각 section 첫 문단의 `hp:secPr`(페이지 정의)은 절대 건드리지 않는다.
 - 표의 `rowCnt`/`colCnt`와 실제 `hp:tr`/`hp:tc` 수를 일치시킨다. `cellAddr`도.
 - 텍스트에 XML 특수문자(`< > &`)는 이스케이프.
 - 목차와 대조되는 장 제목 텍스트(paraPrIDRef 1~3 문단)는 문구를 바꾸지 않는다(스타일만).
 
 ## 반복 종료 조건
 
-- 디자인 목표 1~5가 반영되고 render-check `ok:true` → 종료.
+- 디자인 목표 1~5가 반영되고 render-check `ok:true`, 가능하면 visual-check evidence 생성 → 종료.
 - 같은 목표가 3회 연속 실패 → 그 목표는 "한컴 수동 손질 항목"으로 기록하고 다음 목표로.
 - 최대 10 iteration. 종료 시 최신본이 `output/report.hwpx`, 이력이 `output/iterations/`.
 
 ## 마무리
 
 - `lanes/finalizer/agent/evidence/design-iterations.md`에 iteration 로그(버전·변경·검증 결과) 기록.
-- 사용자 보고: 최종 render-check 요약 + 반영된 디자인 목표 + 남은 수동 손질 항목 + "한컴에서 열어 최종 확인".
+- 사용자 보고: 최종 render-check 요약 + visual-check 결과(있으면) + 반영된 디자인 목표 + 남은 수동 손질 항목 + "한컴에서 열어 최종 확인".
 - **내용(문장·수치·주장)은 절대 바꾸지 않는다.** 디자인만. 내용 문제를 발견하면 orchestrator에 보고.
