@@ -201,6 +201,51 @@ class DiagnoseTests(unittest.TestCase):
             self.assertTrue(any("report.hwpx 없음" in s for s in report["signals"]), report["signals"])
 
 
+def _rich_body(chars: int = 9000) -> str:
+    paragraph = "학생들은 감상과 창작 활동에서 자신의 정서를 음악 요소로 표현하고 서로의 산출물에 근거를 들어 피드백하였다. "
+    body = ["# H.A.R.M.O.N.Y 프로젝트", ""]
+    while sum(len(line) for line in body) < chars:
+        body.append(paragraph)
+        body.append("")
+    return "\n".join(body)
+
+
+class BuildGateTests(unittest.TestCase):
+    def _workspace_with_bundle(self, tmp: str, text: str) -> Path:
+        workspace = Path(tmp) / "ws"
+        (workspace / "output").mkdir(parents=True)
+        (workspace / "output" / "report-draft.md").write_text(text, encoding="utf-8")
+        return workspace
+
+    def test_gate_rejects_skipped_content_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = self._workspace_with_bundle(tmp, _rich_body() + "\n(생략: 차시 운영표 삽입 예정)\n")
+            with self.assertRaises(SystemExit) as ctx:
+                main(["build-hwpx", str(workspace)])
+            self.assertIn("(생략", str(ctx.exception))
+
+    def test_gate_rejects_planning_memo_and_thin_body(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = self._workspace_with_bundle(tmp, "분량 계획표: I장 3쪽\n\n# 제목\n\n짧은 본문\n")
+            with self.assertRaises(SystemExit) as ctx:
+                main(["build-hwpx", str(workspace)])
+            message = str(ctx.exception)
+            self.assertIn("분량 계획표", message)
+            self.assertIn("자", message)  # thin-body finding
+
+    def test_gate_allows_complete_body_and_force_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = self._workspace_with_bundle(tmp, _rich_body())
+            code = main(["build-hwpx", str(workspace)])
+            self.assertEqual(code, 0)
+            self.assertTrue((workspace / "output" / "report.hwpx").exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = self._workspace_with_bundle(tmp, "# 제목\n\n짧은 본문\n")
+            code = main(["build-hwpx", str(workspace), "--force"])
+            self.assertEqual(code, 0)
+            self.assertTrue((workspace / "output" / "report.hwpx").exists())
+
+
 class KordocEngineTests(unittest.TestCase):
     def tearDown(self) -> None:
         os.environ.pop("RCH_KORDOC_CMD", None)
@@ -209,7 +254,7 @@ class KordocEngineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
             (workspace / "output").mkdir(parents=True)
-            (workspace / "output" / "report-draft.md").write_text("# 제목\n\n본문\n", encoding="utf-8")
+            (workspace / "output" / "report-draft.md").write_text(_rich_body(), encoding="utf-8")
 
             stub = Path(tmp) / "kordoc-stub.sh"
             stub.write_text(
@@ -234,7 +279,7 @@ class KordocEngineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "ws"
             (workspace / "output").mkdir(parents=True)
-            (workspace / "output" / "report-draft.md").write_text("# 제목\n", encoding="utf-8")
+            (workspace / "output" / "report-draft.md").write_text(_rich_body(), encoding="utf-8")
             os.environ["RCH_KORDOC_CMD"] = "/nonexistent/kordoc-binary-xyz"
 
             with self.assertRaises(SystemExit) as ctx:

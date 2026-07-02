@@ -683,12 +683,48 @@ def run_lanes_cmd(workspace: Path, agent: str, lanes: list[str] | None, execute:
     return exit_code
 
 
-def build_hwpx_cmd(workspace: Path, output_path: Path | None, engine: str = "builtin") -> None:
+# Text markers that mean the bundle is not a finished body: leftover
+# forbidden words, skipped-content notes, or the writer's planning memo.
+BUILD_GATE_MARKERS = (*FINAL_FORBIDDEN, "(생략", "삽입 예정", "분량 계획표:", "확정한다.]")
+# A body this thin is a skeleton, not a report (chars ≈ pages * 1600).
+BUILD_GATE_MIN_CHARS = 8000
+
+
+def _build_quality_gate(bundle_paths: list[Path]) -> list[str]:
+    findings: list[str] = []
+    total_chars = 0
+    for path in bundle_paths:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        total_chars += len(text)
+        for marker in BUILD_GATE_MARKERS:
+            if marker in text:
+                findings.append(f"{path.name}: 미완성 마커 '{marker}' 발견")
+    if total_chars < BUILD_GATE_MIN_CHARS:
+        findings.append(
+            f"본문 전체 {total_chars}자 — 최소 기준 {BUILD_GATE_MIN_CHARS}자 미만(약 5쪽). "
+            "draft-writer가 규정 분량까지 집필해야 합니다."
+        )
+    return findings
+
+
+def build_hwpx_cmd(
+    workspace: Path, output_path: Path | None, engine: str = "builtin", force: bool = False
+) -> None:
     output_dir = workspace / "output"
     bundle_paths = [output_dir / name for name in FINAL_BUNDLE_FILES if name != "finalization-checklist.md"]
     existing = [path for path in bundle_paths if path.exists()]
     if not existing:
         raise SystemExit("no assembled bundle found; run `rch assemble` first")
+    findings = _build_quality_gate(existing)
+    if findings and not force:
+        raise SystemExit(
+            "빌드 거부 — 번들이 아직 완성 상태가 아닙니다:\n- "
+            + "\n- ".join(findings)
+            + "\n해당 lane을 보강한 뒤 rch assemble → build-hwpx를 다시 실행하세요. "
+            "(중간 확인용 강제 빌드는 --force)"
+        )
+    if findings:
+        print("경고(--force 빌드): " + " | ".join(findings), file=sys.stderr)
     target = output_path or (output_dir / "report.hwpx")
     if engine == "kordoc":
         _build_hwpx_kordoc(workspace, existing, target)
@@ -1379,6 +1415,11 @@ def main(argv: list[str] | None = None) -> int:
         default="builtin",
         help="렌더 엔진: builtin(결정적 구조 렌더러) 또는 kordoc(오픈소스 한국형 보고서 프리셋, Node 18+ 필요)",
     )
+    hwpx_p.add_argument(
+        "--force",
+        action="store_true",
+        help="품질 게이트(미완성 마커·최소 분량) 실패에도 강제 빌드(중간 확인용)",
+    )
 
     diagnose_p = sub.add_parser(
         "diagnose", help="output 폴더를 검진해 보고서가 왜 이상하게 나왔는지 신호를 찾는다"
@@ -1517,7 +1558,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "run-lanes":
         return run_lanes_cmd(Path(args.workspace), args.agent, args.lanes, args.execute)
     if args.cmd == "build-hwpx":
-        build_hwpx_cmd(Path(args.workspace), Path(args.output) if args.output else None, engine=args.engine)
+        build_hwpx_cmd(
+            Path(args.workspace),
+            Path(args.output) if args.output else None,
+            engine=args.engine,
+            force=args.force,
+        )
         return 0
     if args.cmd == "diagnose":
         return diagnose_cmd(Path(args.workspace))
