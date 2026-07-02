@@ -92,6 +92,23 @@ class DesignRenderingTests(unittest.TestCase):
             self.assertIn("▶ 어떻게 기를 것인가?", section)
             self.assertIn("#EEF3FA", header)
 
+    def test_tables_carry_explicit_geometry_for_hancom(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "report.hwpx"
+            md = "# 제목\n\n| 항목 | 값 | 비고 |\n| --- | --- | --- |\n| a | 1 | x |\n"
+            build_hwpx(md, out, images_root=Path(tmp))
+            with zipfile.ZipFile(out) as archive:
+                section = archive.read("Contents/section0.xml").decode("utf-8")
+            # Without hp:sz/hp:cellSz Hancom cannot lay tables out (they collapse).
+            self.assertIn('<hp:sz width="42520"', section)
+            self.assertIn("<hp:cellSz", section)
+            self.assertIn('treatAsChar="1"', section)
+            # Column widths must sum to the body width.
+            import re
+
+            widths = [int(w) for w in re.findall(r'<hp:cellSz width="(\d+)"', section)][:3]
+            self.assertEqual(sum(widths), 42520, widths)
+
     def test_min_pages_warning_when_underfilled(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "report.hwpx"
@@ -135,6 +152,35 @@ class HwpxEditRoundtripTests(unittest.TestCase):
                 self.assertEqual(archive.getinfo("mimetype").compress_type, zipfile.ZIP_STORED)
                 self.assertIn("디자인 반복 본문", archive.read("Contents/section0.xml").decode("utf-8"))
             self.assertTrue(render_check(hwpx).ok)
+
+
+class DiagnoseTests(unittest.TestCase):
+    def test_diagnose_flags_legacy_go_and_old_renderer_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            output = workspace / "output"
+            output.mkdir(parents=True)
+            (output / "missing-inputs.md").write_text("보강 필요", encoding="utf-8")
+            build_hwpx("# 제목\n\n본문\n", output / "report.hwpx", images_root=workspace)
+
+            code = main(["diagnose", str(workspace)])
+            self.assertEqual(code, 0)
+            import json
+
+            report = json.loads((output / "diagnose.json").read_text(encoding="utf-8"))
+            self.assertTrue(any("rch go" in s for s in report["signals"]), report["signals"])
+            self.assertTrue((output / "diagnose.md").exists())
+
+    def test_diagnose_flags_missing_hwpx(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            (workspace / "output").mkdir(parents=True)
+            code = main(["diagnose", str(workspace)])
+            self.assertEqual(code, 0)
+            import json
+
+            report = json.loads((workspace / "output" / "diagnose.json").read_text(encoding="utf-8"))
+            self.assertTrue(any("report.hwpx 없음" in s for s in report["signals"]), report["signals"])
 
 
 class KordocEngineTests(unittest.TestCase):

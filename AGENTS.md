@@ -16,6 +16,8 @@
 
 **그 외 — 레퍼런스 구조 분석, insane 리서치(배경·선행연구), 브레인스토밍, 사진 개인정보, 본문 집필, 표 편집, 요약·목차·부록, 비평, 최종화 — 는 전부 에이전트가 한다.** 과거 파이썬 명령(`rch brainstorm/mine-references/research-background/draft/import-photos`)은 정확도가 낮아 **더 이상 콘텐츠 생성에 쓰지 않는다**(에이전트가 대체).
 
+**`rch go`(및 MCP `go`)는 절대 호출 금지** — placeholder 표 중심의 레거시 스켈레톤 자동화라서 완성 보고서가 아니라 골격이 나온다. 완성 보고서는 반드시 deep-interview → 계획 승인 → autopilot 루프로 만든다. 산출물이 이상하면 `rch diagnose <ws>`로 원인 신호를 먼저 확인한다.
+
 ## 런타임 적응: 실행하는 앱이 자기 서브에이전트로 돌린다
 
 - **Claude Code** — `.claude/agents/`의 서브에이전트를 Task로 스폰한다. 독립 lane은 한 번에 여러 Task로 **병렬** 실행.

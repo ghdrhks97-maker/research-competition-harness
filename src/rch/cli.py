@@ -751,6 +751,96 @@ def _build_hwpx_kordoc(workspace: Path, bundle_paths: list[Path], target: Path) 
     )
 
 
+def diagnose_cmd(workspace: Path) -> int:
+    """Inspect a workspace's output folder and explain why the report looks wrong."""
+    import zipfile
+
+    from rch import pipeline as pipeline_mod_local
+
+    output_dir = workspace / "output"
+    signals: list[str] = []
+    info: dict[str, Any] = {"workspace": str(workspace)}
+
+    if not workspace.exists():
+        print(json.dumps({"ok": False, "signals": [f"workspace missing: {workspace}"]}, ensure_ascii=False))
+        return 1
+
+    # 1. Legacy skeleton detection: `rch go` leaves missing-inputs.md and
+    #    placeholder tables — that path produces scaffolding, not a finished report.
+    if (output_dir / "missing-inputs.md").exists():
+        signals.append(
+            "레거시 `rch go` 스켈레톤 산출물 흔적(output/missing-inputs.md). 이 경로는 placeholder 표 중심의 "
+            "골격만 만듭니다 — 완성 보고서는 에이전트 autopilot(계획 승인 → rch next 루프)으로 다시 생성하세요."
+        )
+
+    # 2. Bundle / lanes state.
+    if not (output_dir / "bundle-manifest.json").exists():
+        signals.append("assemble 번들 없음(output/bundle-manifest.json) — lane 산출물이 조립되지 않았습니다.")
+    lane_states: dict[str, str] = {}
+    for lane in pipeline_mod_local.LANE_ROLES:
+        status, _ = pipeline_mod_local._lane_status(workspace, lane)
+        lane_states[lane] = status
+    info["lanes"] = lane_states
+    missing_lanes = [lane for lane, status in lane_states.items() if status == "missing"]
+    if len(missing_lanes) >= 5:
+        signals.append(
+            f"lane 산출물 대부분 없음({len(missing_lanes)}개: {', '.join(missing_lanes[:6])}...). "
+            "에이전트 파이프라인(Phase 1~4)이 돌지 않은 채 렌더만 실행된 것으로 보입니다."
+        )
+
+    # 3. Claim health.
+    counts = {"real": 0, "derived": 0, "expected": 0, "placeholder": 0, "forbidden": 0}
+    for path in workspace.glob("lanes/*/*/claim-ledger.json"):
+        data = _read_json_safe(path)
+        for claim in (data or {}).get("claims", []) if isinstance(data, dict) else []:
+            status = claim.get("status") if isinstance(claim, dict) else None
+            if status in counts:
+                counts[status] += 1
+    info["claims"] = counts
+    if counts["placeholder"] > 0:
+        signals.append(f"placeholder claim {counts['placeholder']}건 — 최종 반영 불가 상태의 자리표시자가 남아 있습니다.")
+
+    # 4. HWPX inspection.
+    hwpx_path = output_dir / "report.hwpx"
+    if not hwpx_path.exists():
+        signals.append("output/report.hwpx 없음.")
+    else:
+        try:
+            with zipfile.ZipFile(hwpx_path) as archive:
+                section = archive.read("Contents/section0.xml").decode("utf-8", errors="replace")
+            if "<hp:tbl" in section and "cellSz" not in section:
+                signals.append(
+                    "구버전 렌더러로 빌드된 HWPX(표에 hp:cellSz/hp:sz 크기 정보 없음 → 한컴에서 표가 붕괴되어 보임). "
+                    "최신 하네스로 업데이트(git pull) 후 `rch build-hwpx`를 다시 실행하세요."
+                )
+            if "hp:pagePr" not in section:
+                signals.append("페이지 정의(hp:pagePr) 없음 → 한컴에서 빈 문서. `rch build-hwpx` 재실행 필요.")
+        except zipfile.BadZipFile:
+            signals.append("report.hwpx가 유효한 zip이 아님 — 손으로 조립된 파일로 보입니다. `rch build-hwpx`/`rch hwpx-pack`만 사용하세요.")
+        toc_path = output_dir / "toc.md"
+        check = render_check_mod.render_check(hwpx_path, toc_path=toc_path if toc_path.exists() else None)
+        info["render_check"] = check.to_dict()
+        signals.extend(f"render-check: {err}" for err in check.errors)
+
+    if not signals:
+        signals.append("결정적 문제 신호 없음 — 한컴 화면 캡처와 함께 output/diagnose.json을 공유하면 더 파고들 수 있습니다.")
+
+    result = {"ok": True, "signals": signals, **info}
+    output_dir.mkdir(exist_ok=True)
+    (output_dir / "diagnose.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    lines = ["# 진단 결과", ""] + [f"- {signal}" for signal in signals] + [""]
+    (output_dir / "diagnose.md").write_text("\n".join(lines), encoding="utf-8")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _read_json_safe(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def hwpx_unpack_cmd(workspace: Path, hwpx_path: Path | None, target_dir: Path | None) -> None:
     source = hwpx_path or (workspace / "output" / "report.hwpx")
     target = target_dir or (workspace / "output" / "hwpx-src")
@@ -1270,6 +1360,11 @@ def main(argv: list[str] | None = None) -> int:
         help="렌더 엔진: builtin(결정적 구조 렌더러) 또는 kordoc(오픈소스 한국형 보고서 프리셋, Node 18+ 필요)",
     )
 
+    diagnose_p = sub.add_parser(
+        "diagnose", help="output 폴더를 검진해 보고서가 왜 이상하게 나왔는지 신호를 찾는다"
+    )
+    diagnose_p.add_argument("workspace")
+
     icons_p = sub.add_parser(
         "render-icons", help="render input/icons/icon-spec.json into flat PNG icons (pure stdlib)"
     )
@@ -1338,6 +1433,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     if args.cmd == "go":
+        print(
+            "경고: `rch go`는 레거시 스켈레톤 자동화입니다(placeholder 표 중심, 완성 품질 아님). "
+            "완성 보고서는 에이전트 autopilot(AGENTS.md — 인터뷰 → 계획 승인 → rch next 루프)을 사용하세요.",
+            file=sys.stderr,
+        )
         go_cmd(
             Path(args.workspace),
             Path(args.answers) if args.answers else None,
@@ -1392,6 +1492,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "build-hwpx":
         build_hwpx_cmd(Path(args.workspace), Path(args.output) if args.output else None, engine=args.engine)
         return 0
+    if args.cmd == "diagnose":
+        return diagnose_cmd(Path(args.workspace))
     if args.cmd == "render-icons":
         report = icons_mod.render_icons(Path(args.workspace))
         print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))

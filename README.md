@@ -46,6 +46,7 @@
 | `rch build-hwpx <ws>` | 조립된 bundle → HWPX 렌더. `--engine kordoc`으로 한국형 보고서 프리셋 렌더(Node 18+) | `output/report.hwpx` |
 | `rch render-check <ws>` | HWPX 구조·XML·페이지 추정·목차-본문 일치·표 무결성 검증. `--page-limit`(상한)·`--min-pages`(하한, 규정 분량 채움 검사) | `output/render-check.{json,md}` |
 | `rch revise-loop <ws>` | critic·check·render-check 피드백을 우선순위 수정 백로그로 통합 | `output/revision-tasks.{json,md}` |
+| `rch diagnose <ws>` | 보고서가 이상하게 나왔을 때 output 폴더를 검진(레거시 go 흔적·표 크기 누락·lane 미실행·placeholder 잔존) | `output/diagnose.{json,md}` |
 
 한 번에 도는 흐름:
 

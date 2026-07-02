@@ -51,6 +51,11 @@ TABLE_HEADER_FILL = "#D9E2F3"
 BOX_FILL = "#EEF3FA"
 BOX_BORDER_FILL_ID = 3
 CHAPTER_BAR_FILL_ID = 4
+# A4 body width in HWPUNIT (page 59528 minus 8504 margins each side).
+# Tables must carry explicit hp:sz/hp:cellSz geometry — without cell widths
+# Hancom cannot lay the table out and it renders collapsed.
+BODY_WIDTH = 42520
+ROW_HEIGHT = 1700
 
 
 @dataclass
@@ -76,11 +81,49 @@ def _paragraph(text: str, para_id: int = BODY_PARA, char_id: int = 0) -> str:
     return f'<hp:p paraPrIDRef="{para_id}" styleIDRef="0">{_run(text, char_id)}</hp:p>'
 
 
+def _col_widths(col_count: int) -> list[int]:
+    base = BODY_WIDTH // col_count
+    widths = [base] * col_count
+    widths[-1] += BODY_WIDTH - base * col_count
+    return widths
+
+
+def _tbl_open(row_cnt: int, col_cnt: int, border_fill: int) -> str:
+    return (
+        f'<hp:tbl id="0" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" '
+        f'textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="1" '
+        f'rowCnt="{row_cnt}" colCnt="{col_cnt}" cellSpacing="0" borderFillIDRef="{border_fill}" noAdjust="0">'
+        f'<hp:sz width="{BODY_WIDTH}" widthRelTo="ABSOLUTE" height="{row_cnt * ROW_HEIGHT}" '
+        f'heightRelTo="ABSOLUTE" protect="0"/>'
+        '<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" '
+        'holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" '
+        'vertOffset="0" horzOffset="0"/>'
+        '<hp:outMargin left="0" right="0" top="141" bottom="141"/>'
+        '<hp:inMargin left="510" right="510" top="141" bottom="141"/>'
+    )
+
+
+def _tc(paragraphs: str, col: int, row: int, width: int, fill: int) -> str:
+    return (
+        f'<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" '
+        f'borderFillIDRef="{fill}">'
+        f'<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" '
+        f'linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" '
+        f'hasNumRef="0">{paragraphs}</hp:subList>'
+        f'<hp:cellAddr colAddr="{col}" rowAddr="{row}"/>'
+        '<hp:cellSpan colSpan="1" rowSpan="1"/>'
+        f'<hp:cellSz width="{width}" height="{ROW_HEIGHT}"/>'
+        '<hp:cellMargin left="510" right="510" top="141" bottom="141"/>'
+        "</hp:tc>"
+    )
+
+
 def _table(rows: list[list[str]]) -> str:
     if not rows:
         return ""
     col_count = max(len(row) for row in rows)
-    parts = [f'<hp:tbl rowCnt="{len(rows)}" colCnt="{col_count}" borderFillIDRef="1">']
+    widths = _col_widths(col_count)
+    parts = [_tbl_open(len(rows), col_count, 1)]
     for row_index, row in enumerate(rows):
         parts.append("<hp:tr>")
         for col_index in range(col_count):
@@ -92,12 +135,7 @@ def _table(rows: list[list[str]]) -> str:
                 TABLE_HEADER_PARA if header else BODY_PARA,
                 TABLE_HEADER_CHAR if header else 0,
             )
-            parts.append(
-                '<hp:tc borderFillIDRef="{fill}"><hp:cellAddr colAddr="{col}" rowAddr="{r}"/>'
-                '<hp:cellSpan colSpan="1" rowSpan="1"/><hp:subList>{para}</hp:subList></hp:tc>'.format(
-                    fill=fill_id, col=col_index, r=row_index, para=para
-                )
-            )
+            parts.append(_tc(para, col_index, row_index, widths[col_index], fill_id))
         parts.append("</hp:tr>")
     parts.append("</hp:tbl>")
     # A table object lives inside a paragraph run in OWPML.
@@ -107,9 +145,8 @@ def _table(rows: list[list[str]]) -> str:
 def _single_cell_table(paragraphs: str, fill_id: int) -> str:
     return (
         f'<hp:p paraPrIDRef="{BODY_PARA}" styleIDRef="0"><hp:run charPrIDRef="0">'
-        f'<hp:tbl rowCnt="1" colCnt="1" borderFillIDRef="{fill_id}"><hp:tr>'
-        f'<hp:tc borderFillIDRef="{fill_id}"><hp:cellAddr colAddr="0" rowAddr="0"/>'
-        f'<hp:cellSpan colSpan="1" rowSpan="1"/><hp:subList>{paragraphs}</hp:subList></hp:tc>'
+        f"{_tbl_open(1, 1, fill_id)}<hp:tr>"
+        f"{_tc(paragraphs, 0, 0, BODY_WIDTH, fill_id)}"
         "</hp:tr></hp:tbl></hp:run></hp:p>"
     )
 
@@ -186,8 +223,13 @@ def _header_xml() -> str:
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
         f'<hh:head xmlns:hh="{HEAD_NS}" version="1.4" secCnt="1">'
         "<hh:refList>"
-        '<hh:fontfaces itemCnt="1"><hh:fontface lang="HANGUL" fontCnt="1">'
-        '<hh:font id="0" face="함초롬바탕" type="TTF" isEmbedded="0"/></hh:fontface></hh:fontfaces>'
+        '<hh:fontfaces itemCnt="7">'
+        + "".join(
+            f'<hh:fontface lang="{lang}" fontCnt="1">'
+            '<hh:font id="0" face="함초롬바탕" type="TTF" isEmbedded="0"/></hh:fontface>'
+            for lang in ("HANGUL", "LATIN", "HANJA", "JAPANESE", "OTHER", "SYMBOL", "USER")
+        )
+        + "</hh:fontfaces>"
         '<hh:charProperties itemCnt="7">'
         + "".join(
             _char_property(index, height, bold, color)
