@@ -772,6 +772,21 @@ def diagnose_cmd(workspace: Path) -> int:
             "레거시 `rch go` 스켈레톤 산출물 흔적(output/missing-inputs.md). 이 경로는 placeholder 표 중심의 "
             "골격만 만듭니다 — 완성 보고서는 에이전트 autopilot(계획 승인 → rch next 루프)으로 다시 생성하세요."
         )
+    draft_path = output_dir / "report-draft.md"
+    if draft_path.exists():
+        draft_text = draft_path.read_text(encoding="utf-8", errors="replace")
+        if "확정한다.]" in draft_text or "harness-draft" in draft_text:
+            signals.append(
+                "본문이 파이썬 골격(harness-draft)입니다 — '[…확정한다.]' 자리표시 문단이 그대로 남아 있고 "
+                "draft-writer 에이전트가 집필하지 않았습니다. autopilot으로 Phase 1~2부터 다시 실행하세요."
+            )
+    manifest = _read_json_safe(output_dir / "bundle-manifest.json")
+    if isinstance(manifest, dict):
+        sources = json.dumps(manifest, ensure_ascii=False)
+        if "harness-draft" in sources or "harness-" in sources:
+            signals.append(
+                "bundle-manifest의 source lane이 harness-*(파이썬 생성기)입니다 — 에이전트 lane 산출물이 아닙니다."
+            )
 
     # 2. Bundle / lanes state.
     if not (output_dir / "bundle-manifest.json").exists():
@@ -1292,6 +1307,11 @@ def main(argv: list[str] | None = None) -> int:
     go_p.add_argument("--photo-count", type=int, default=photos_mod.DEFAULT_REQUIRED_PHOTOS)
     go_p.add_argument("--offline-research", action="store_true", help="network 없이 배경연구 fallback 사용")
     go_p.add_argument("--skip-hwpx", action="store_true", help="HWPX build/render-check 생략")
+    go_p.add_argument(
+        "--skeleton",
+        action="store_true",
+        help="레거시 골격 생성 확인 플래그. 없으면 실행 거부(완성 보고서는 autopilot 사용)",
+    )
 
     lane_p = sub.add_parser("lane", help="create lane inbox for an agent")
     lane_p.add_argument("workspace")
@@ -1433,6 +1453,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     if args.cmd == "go":
+        if not args.skeleton:
+            raise SystemExit(
+                "거부: `rch go`는 레거시 스켈레톤 자동화입니다(본문이 '[…확정한다.]' placeholder 골격으로 "
+                "채워지며 완성 보고서가 아닙니다). 완성 보고서는 에이전트 autopilot"
+                "(AGENTS.md — deep-interview → 계획 승인 → rch next 루프)을 사용하세요. "
+                "골격이 정말 필요하면 `rch go <ws> --skeleton`으로 다시 실행하세요."
+            )
         print(
             "경고: `rch go`는 레거시 스켈레톤 자동화입니다(placeholder 표 중심, 완성 품질 아님). "
             "완성 보고서는 에이전트 autopilot(AGENTS.md — 인터뷰 → 계획 승인 → rch next 루프)을 사용하세요.",

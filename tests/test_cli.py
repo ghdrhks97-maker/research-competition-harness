@@ -443,10 +443,16 @@ class CliTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            # Without --skeleton the legacy path refuses (agents kept off it).
+            with self.assertRaises(SystemExit) as ctx:
+                main(["go", str(workspace), "--answers", str(answers)])
+            self.assertIn("skeleton", str(ctx.exception))
+
             code = main(
                 [
                     "go",
                     str(workspace),
+                    "--skeleton",
                     "--answers",
                     str(answers),
                     "--rule-file",
