@@ -15,12 +15,16 @@ import re
 from dataclasses import dataclass, field
 from typing import Iterable, Literal
 
-BlockKind = Literal["heading", "paragraph", "table", "list", "image", "hr"]
+BlockKind = Literal["heading", "paragraph", "table", "list", "image", "hr", "box"]
 
 IMAGE_RE = re.compile(r"!\[(?P<alt>[^\]]*)\]\((?P<src>[^)]+)\)")
 HEADING_RE = re.compile(r"^(?P<hashes>#{1,6})\s+(?P<text>.*\S)\s*$")
 ORDERED_RE = re.compile(r"^\s*\d+[.)]\s+(?P<text>.*)$")
 UNORDERED_RE = re.compile(r"^\s*[-*+]\s+(?P<text>.*)$")
+# Design directive: a callout box the HWPX builder renders as a shaded
+# single-cell table. `:::box 제목` ... `:::`
+BOX_OPEN_RE = re.compile(r"^:::box(?:\s+(?P<title>.*\S))?\s*$")
+BOX_CLOSE = ":::"
 
 
 @dataclass
@@ -82,6 +86,22 @@ def parse_markdown(text: str) -> list[Block]:
         if not stripped:
             flush_paragraph()
             index += 1
+            continue
+
+        box_open = BOX_OPEN_RE.match(stripped)
+        if box_open:
+            flush_paragraph()
+            index += 1
+            box_lines: list[str] = []
+            while index < total and lines[index].strip() != BOX_CLOSE:
+                if lines[index].strip():
+                    box_lines.append(lines[index].strip())
+                index += 1
+            if index < total:
+                index += 1  # consume the closing :::
+            blocks.append(
+                Block(kind="box", text=(box_open["title"] or "").strip(), items=box_lines)
+            )
             continue
 
         heading = HEADING_RE.match(line)

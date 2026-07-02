@@ -51,13 +51,17 @@ def _pass_through_critic(workspace: Path) -> None:
         _pass_lane(workspace, lane)
 
 
-def _finalize_outputs(workspace: Path) -> None:
+def _finalize_outputs(workspace: Path, designed: bool = True) -> None:
     _pass_lane(workspace, "finalizer")
     output = workspace / "output"
     output.mkdir(exist_ok=True)
     (output / "bundle-manifest.json").write_text("{}", encoding="utf-8")
     (output / "report.hwpx").write_bytes(b"PK")
     (output / "render-check.json").write_text(json.dumps({"ok": True}), encoding="utf-8")
+    if designed:
+        log = workspace / "lanes" / "finalizer" / "agent" / "evidence" / "design-iterations.md"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("v01: 도비라·박스 적용", encoding="utf-8")
 
 
 class PipelineTests(unittest.TestCase):
@@ -140,6 +144,18 @@ class PipelineTests(unittest.TestCase):
             plan = compute_next(workspace, final_check=lambda ws, **kw: FakeCheck(ok=True))
             self.assertTrue(plan.done)
             self.assertEqual(plan.phase, "done")
+
+    def test_design_phase_runs_after_final_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            init_workspace(workspace)
+            _approve_plan(workspace)
+            _pass_through_critic(workspace)
+            _finalize_outputs(workspace, designed=False)
+
+            plan = compute_next(workspace, final_check=lambda ws, **kw: FakeCheck(ok=True))
+            self.assertEqual(plan.phase, "phase6-design")
+            self.assertEqual(plan.actions[0]["role"], "hwpx-designer")
 
     def test_failed_final_gate_goes_to_revise(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

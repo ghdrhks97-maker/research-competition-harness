@@ -56,7 +56,10 @@
 - 예상값(가상) 포함 완성본: `rch check <ws> --final --allow-expected` — 라벨링된 `expected` claim만 허용되고, 교체 목록이 `output/expected-claims.md`에 남는다. 라벨 없는 `expected`와 `placeholder`는 여전히 차단된다.
 
 ### Phase 5 — 조립·렌더
-**`finalizer`** 지휘로 `rch assemble` → final 게이트(위 두 모드 중 해당하는 것, 통과 필수) → `rch build-hwpx` → `rch render-check`. 완료 시 `output/report.hwpx`와 남은 확인사항 제시(예상값 포함이면 `output/expected-claims.md` 교체 목록 안내), "한컴에서 최종 확인" 안내.
+**`finalizer`** 지휘로 `rch assemble` → final 게이트(위 두 모드 중 해당하는 것, 통과 필수) → 렌더(엔진 우선순위: 대회 양식 kordoc fill → kordoc 프리셋 → `rch build-hwpx`) → `rch render-check`.
+
+### Phase 6 — 디자인 반복 (hwpx-designer)
+구조 검증을 통과한 `report.hwpx`를 **`hwpx-designer`** 가 수상작 수준으로 끌어올린다: `rch hwpx-unpack` → XML 편집(표지·장 도비라·색 박스·아이콘 글리프·카드형 요약) → `rch hwpx-pack`(자동 render-check) 반복, 반복본은 `output/iterations/report_v<NN>.hwpx`. 완료 시 최종본과 남은 확인사항 제시(예상값 포함이면 `output/expected-claims.md` 교체 목록 안내), "한컴에서 최종 확인" 안내.
 
 ## Autopilot 루프 (계획 승인 후 자동 발동 — 필수)
 
@@ -76,9 +79,9 @@
 - 서브에이전트가 판단이 어려운 문제를 만나면 verdict를 `blocked`+이유로 남긴다. autopilot이 그걸 `needs_user`로 승격해 사용자에게 묻는다. 사소한 선택은 blocked로 만들지 말고 보수적 기본값으로 스스로 결정한 뒤 lane-output에 기록한다.
 - `rch next`는 예상값(가상) claim이 있으면 final 게이트를 자동으로 `--allow-expected` 모드로 판정한다.
 
-## 에이전트 역할 (13)
+## 에이전트 역할 (14)
 
-`brainstorm`, `reference-miner`, `background-researcher`, `photo-curator`, `survey-analyst`, `evidence-curator`, `draft-writer`, `table-layout`, `summary-sheet`, `toc-builder`, `appendix-builder`, `critic`, `finalizer`. 각 에이전트는 `lanes/<lane>/agent/`에 계약 파일 4종(`lane-output.md`, `lane-output.json`, `claim-ledger.json`, `verdict.json`)을 **진짜 내용**으로 채운다.
+`brainstorm`, `reference-miner`, `background-researcher`, `photo-curator`, `survey-analyst`, `evidence-curator`, `draft-writer`, `table-layout`, `summary-sheet`, `toc-builder`, `appendix-builder`, `critic`, `finalizer`, `hwpx-designer`(디자인 반복 — lane 없음, finalizer lane evidence에 기록). 각 lane 에이전트는 `lanes/<lane>/agent/`에 계약 파일 4종(`lane-output.md`, `lane-output.json`, `claim-ledger.json`, `verdict.json`)을 **진짜 내용**으로 채운다.
 
 ## 완성 원칙: 자료가 없어도 예상값으로 완성한다
 
@@ -91,7 +94,7 @@
 - `unreviewed`/`high` 위험 사진은 본문·부록에 넣지 않는다. 사진이 없으면 "사진첨부필요" 자리표시로 진행한다.
 - 레퍼런스·웹 문장을 복사하지 않는다(구조·근거 후보만). 존재하지 않는 논문·저자·DOI를 만들지 않는다.
 - 최종 본문에 예정/추후/초안/미정/TODO 금지(단 "예상값(가상)" 라벨은 draft에서 허용).
-- HWPX 조립은 finalizer 한 번만. **HWPX/XML을 손으로 쓰지 말고 `rch build-hwpx`만** 쓴다. 구조 통과(render-check) ≠ Hancom 실제 표시(사람이 한컴에서 확인). 렌더 품질은 finalizer가 강하게 책임진다.
+- HWPX 조립은 finalizer 한 번만. **zip을 손으로 만들지 않는다** — 최초 생성은 `rch build-hwpx`(또는 kordoc), 이후 디자인 편집은 `hwpx-designer`가 `rch hwpx-unpack`→XML 편집→`rch hwpx-pack`(자동 검증) 루프 안에서만 한다. pack의 render-check 실패 = 그 편집 폐기. 구조 통과 ≠ Hancom 실제 표시(사람이 한컴에서 확인). 렌더 품질은 finalizer·hwpx-designer가 강하게 책임진다.
 
 ## 사용량
 

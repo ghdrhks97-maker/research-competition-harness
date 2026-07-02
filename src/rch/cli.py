@@ -17,6 +17,7 @@ from rch import background as background_mod
 from rch import brainstorm as brainstorm_mod
 from rch import draft as draft_mod
 from rch import hwpx as hwpx_mod
+from rch import hwpx_edit as hwpx_edit_mod
 from rch import photos as photos_mod
 from rch import pipeline as pipeline_mod
 from rch import references as references_mod
@@ -749,6 +750,44 @@ def _build_hwpx_kordoc(workspace: Path, bundle_paths: list[Path], target: Path) 
     )
 
 
+def hwpx_unpack_cmd(workspace: Path, hwpx_path: Path | None, target_dir: Path | None) -> None:
+    source = hwpx_path or (workspace / "output" / "report.hwpx")
+    target = target_dir or (workspace / "output" / "hwpx-src")
+    names = hwpx_edit_mod.unpack_hwpx(source, target)
+    print(
+        json.dumps(
+            {
+                "unpacked_to": str(target),
+                "members": names,
+                "note": "Contents/header.xml·section0.xml을 편집한 뒤 `rch hwpx-pack`으로 재조립+검증하세요.",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+def hwpx_pack_cmd(workspace: Path, source_dir: Path | None, output_path: Path | None) -> int:
+    source = source_dir or (workspace / "output" / "hwpx-src")
+    target = output_path or (workspace / "output" / "report.hwpx")
+    hwpx_edit_mod.pack_hwpx(source, target)
+    toc_path = workspace / "output" / "toc.md"
+    check = render_check_mod.run_render_check(
+        target,
+        workspace / "output",
+        toc_path=toc_path if toc_path.exists() else None,
+        page_limit=render_check_mod.DEFAULT_PAGE_LIMIT,
+    )
+    print(
+        json.dumps(
+            {"packed": str(target), "render_check": check.to_dict()},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return 0 if check.ok else 1
+
+
 def render_check_cmd(workspace: Path, hwpx_path: Path | None, page_limit: int) -> int:
     target = hwpx_path or (workspace / "output" / "report.hwpx")
     toc_path = workspace / "output" / "toc.md"
@@ -1226,6 +1265,16 @@ def main(argv: list[str] | None = None) -> int:
         help="렌더 엔진: builtin(결정적 구조 렌더러) 또는 kordoc(오픈소스 한국형 보고서 프리셋, Node 18+ 필요)",
     )
 
+    unpack_p = sub.add_parser("hwpx-unpack", help="unpack a .hwpx zip for design-iteration XML editing")
+    unpack_p.add_argument("workspace")
+    unpack_p.add_argument("--hwpx", help="path to the .hwpx (default output/report.hwpx)")
+    unpack_p.add_argument("--dir", help="target directory (default output/hwpx-src)")
+
+    pack_p = sub.add_parser("hwpx-pack", help="repack an unpacked hwpx dir and validate with render-check")
+    pack_p.add_argument("workspace")
+    pack_p.add_argument("--dir", help="unpacked directory (default output/hwpx-src)")
+    pack_p.add_argument("--output", help="output .hwpx path (default output/report.hwpx)")
+
     render_p = sub.add_parser("render-check", help="validate a built .hwpx structure")
     render_p.add_argument("workspace")
     render_p.add_argument("--hwpx", help="path to the .hwpx (default output/report.hwpx)")
@@ -1330,6 +1379,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "build-hwpx":
         build_hwpx_cmd(Path(args.workspace), Path(args.output) if args.output else None, engine=args.engine)
         return 0
+    if args.cmd == "hwpx-unpack":
+        hwpx_unpack_cmd(
+            Path(args.workspace),
+            Path(args.hwpx) if args.hwpx else None,
+            Path(args.dir) if args.dir else None,
+        )
+        return 0
+    if args.cmd == "hwpx-pack":
+        return hwpx_pack_cmd(
+            Path(args.workspace),
+            Path(args.dir) if args.dir else None,
+            Path(args.output) if args.output else None,
+        )
     if args.cmd == "render-check":
         return render_check_cmd(
             Path(args.workspace), Path(args.hwpx) if args.hwpx else None, args.page_limit

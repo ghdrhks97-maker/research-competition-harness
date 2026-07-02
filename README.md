@@ -146,7 +146,7 @@ rch next <ws> → done?        → 종료 보고 (한컴 확인 + expected-claim
 
 `rch next`는 lane verdict·산출물 존재·final 게이트를 결정적으로 검사해 다음 작업을 JSON으로 내놓는 상태 머신입니다(LLM 호출 없음, `output/next-plan.json`). 품질 문제(critic 지적·check 오류·render 실패)는 사용자에게 묻지 않고 해당 lane 재위임으로 해소하며, 멈추는 경우는 `needs_user`·개인정보 위험·같은 phase 3회 연속 실패뿐입니다.
 
-### 에이전트별 사용법 (13종)
+### 에이전트별 사용법 (14종)
 
 각 에이전트는 자기 lane의 계약 파일 4종(`lane-output.md`, `lane-output.json`, `claim-ledger.json`, `verdict.json`)을 **진짜 내용**으로 채웁니다. 상세 지침은 `.claude/agents/<이름>.md`.
 
@@ -165,6 +165,7 @@ rch next <ws> → done?        → 종료 보고 (한컴 확인 + expected-claim
 | `appendix-builder` | 3 | 과정안·루브릭·활동지·부록 |
 | `critic` | 4 | 심사자 관점 비평 → `machine-feedback.json` |
 | `finalizer` | 5 | 정합화·HWPX 조립·렌더 검증 지휘 |
+| `hwpx-designer` | 6 | 검증된 HWPX에 수상작급 디자인(표지·도비라·색 박스·아이콘) 반복 적용 |
 
 Claude Code는 이들을 서브에이전트로 자동 스폰(병렬), Antigravity는 AGY 에이전트 매니저, Codex는 병렬 태스크로 돌립니다. 병렬 스폰이 없으면 `AGENTS.md`의 의존성 순서대로 수행합니다.
 
@@ -297,7 +298,19 @@ CLI마다 하위 명령이 달라 각 에이전트의 실행 명령을 환경변
 2. **kordoc 보고서 프리셋** — `rch build-hwpx <ws> --engine kordoc` (내부에서 `npx -y kordoc generate ... --preset 보고서` 실행, `RCH_KORDOC_CMD`로 명령 조정)
 3. **빌트인** — `rch build-hwpx <ws>` (의존성 없음, 항상 유효한 HWPX)
 
-어느 경로든 `rch render-check`로 검증하고, 표지·색 박스·아이콘 같은 최종 꾸밈은 한컴에서 사람이 마무리합니다.
+어느 경로든 `rch render-check`로 검증합니다.
+
+### 디자인 반복 루프 (hwpx-designer)
+
+구조 검증을 통과한 뒤에는 **`hwpx-designer` 에이전트**가 수상작 수준 디자인(표지, 장 도비라 바, 색 박스, 아이콘 글리프, 카드형 요약서)을 반복적으로 입힙니다:
+
+```bash
+rch hwpx-unpack <ws>    # output/report.hwpx → output/hwpx-src/ (XML 편집 가능)
+# Contents/header.xml·section0.xml 편집 (에이전트)
+rch hwpx-pack <ws>      # 재조립(mimetype 규칙 준수) + render-check 자동 실행
+```
+
+pack이 검증에 실패하면 그 편집은 폐기하고 더 작은 단위로 재시도합니다. 반복본은 `output/iterations/report_v<NN>.hwpx`로 쌓입니다. 본문 마크다운 단계에서도 `:::box 제목` ... `:::` 지시문으로 색 박스를, ▶ ◆ ■ 글리프로 아이콘 리듬을 쓸 수 있고, 장 제목(H1)은 자동으로 액센트 도비라 바로 렌더됩니다.
 
 XLSX 분석에는 `openpyxl`이 필요합니다(`pip install .[xlsx]`). CSV/TSV는 추가 의존성 없이 동작합니다.
 

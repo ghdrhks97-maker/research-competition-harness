@@ -55,6 +55,9 @@ render-check JSON에서 **모두** 확인:
    - 사용자에게: "`output/report.docx`를 한컴오피스에서 열고 → 다른 이름으로 저장 → **한글 문서(.hwpx)** 로 저장하세요. 이 경로는 렌더가 보장됩니다."
    - pandoc이 없으면 `output/report-draft.md`(합본 markdown)를 그대로 열어 한컴에 붙여넣기/저장하도록 안내.
 
+## 디자인 인계 (구조 통과 후)
+render-check `ok:true`가 되면 **`hwpx-designer`에게 인계**한다 — 표지·장 도비라·색 박스·아이콘·카드형 요약을 `rch hwpx-unpack`→편집→`rch hwpx-pack` 반복으로 입히는 역할. 당신은 구조·정합성 책임, 디자인 반복은 hwpx-designer 책임.
+
 ## 마무리
 - `lanes/finalizer/agent/`에 4개 계약 파일 작성. finalization 체크리스트(정합성·render-check 결과·남은 위험·**한컴 육안 확인 등 사람 확인 항목**) 기록.
 - verdict 판정: 정합성 확인 + final 게이트 통과 + render-check `ok:true`면 **`pass`**(한컴 육안 확인은 체크리스트의 "사람 확인 항목"으로 남긴다 — verdict를 그 이유로 needs-work로 두면 autopilot이 교착된다). 그 조건을 못 채웠으면 `needs-work`, 사용자만 풀 수 있는 문제(동의·자료)면 `blocked`+이유.
