@@ -32,9 +32,11 @@ class HwpxPageDefinitionTests(unittest.TestCase):
             with zipfile.ZipFile(out) as archive:
                 section = archive.read("Contents/section0.xml").decode("utf-8")
                 header = archive.read("Contents/header.xml").decode("utf-8")
-            # First H1 is the large centered document title; later H1s are chapter headings.
+            # First H1 is the large centered document title; later H1s render
+            # as accent chapter bars (white bold text on filled cell).
             self.assertIn('charPrIDRef="5"', section)
-            self.assertIn('charPrIDRef="1"', section)
+            self.assertIn('charPrIDRef="6"', section)
+            self.assertIn('borderFillIDRef="4"', section)
             # Table header row sits on the shaded borderFill with the accent char shape.
             self.assertIn('borderFillIDRef="2"', section)
             self.assertIn('charPrIDRef="4"', section)
@@ -64,6 +66,67 @@ class HwpxPageDefinitionTests(unittest.TestCase):
             check = render_check(broken)
             self.assertFalse(check.ok)
             self.assertTrue(any("pagePr" in error for error in check.errors))
+
+
+class DesignRenderingTests(unittest.TestCase):
+    def test_chapter_bar_and_callout_box(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "report.hwpx"
+            md = (
+                "# 문서 제목\n\n"
+                "# I. 연구의 필요성\n\n"
+                ":::box 연구 질문\n"
+                "▶ 어떻게 기를 것인가?\n"
+                ":::\n"
+            )
+            build_hwpx(md, out, images_root=Path(tmp))
+            with zipfile.ZipFile(out) as archive:
+                section = archive.read("Contents/section0.xml").decode("utf-8")
+                header = archive.read("Contents/header.xml").decode("utf-8")
+            # Chapter H1 renders as a white-bold paragraph on an accent-filled bar.
+            self.assertIn('borderFillIDRef="4"', section)
+            self.assertIn('charPrIDRef="6"', section)
+            # The :::box directive becomes a shaded callout cell with its content.
+            self.assertIn('borderFillIDRef="3"', section)
+            self.assertIn("연구 질문", section)
+            self.assertIn("▶ 어떻게 기를 것인가?", section)
+            self.assertIn("#EEF3FA", header)
+
+    def test_chapter_bar_headings_still_match_toc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "report.hwpx"
+            build_hwpx("# 문서 제목\n\n# I. 연구의 필요성\n\n본문\n", out, images_root=Path(tmp))
+            check = render_check(out)
+            self.assertTrue(check.ok, check.errors)
+            self.assertGreaterEqual(check.heading_count, 1)
+
+
+class HwpxEditRoundtripTests(unittest.TestCase):
+    def test_unpack_edit_pack_keeps_valid_structure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "ws"
+            (workspace / "output").mkdir(parents=True)
+            hwpx = workspace / "output" / "report.hwpx"
+            build_hwpx("# 제목\n\n본문\n", hwpx, images_root=workspace)
+
+            code = main(["hwpx-unpack", str(workspace)])
+            self.assertEqual(code, 0)
+            section = workspace / "output" / "hwpx-src" / "Contents" / "section0.xml"
+            self.assertTrue(section.exists())
+            section.write_text(
+                section.read_text(encoding="utf-8").replace("본문", "디자인 반복 본문"),
+                encoding="utf-8",
+            )
+
+            code = main(["hwpx-pack", str(workspace)])
+            self.assertEqual(code, 0)
+            with zipfile.ZipFile(hwpx) as archive:
+                names = archive.namelist()
+                # OWPML requires mimetype first and stored uncompressed.
+                self.assertEqual(names[0], "mimetype")
+                self.assertEqual(archive.getinfo("mimetype").compress_type, zipfile.ZIP_STORED)
+                self.assertIn("디자인 반복 본문", archive.read("Contents/section0.xml").decode("utf-8"))
+            self.assertTrue(render_check(hwpx).ok)
 
 
 class KordocEngineTests(unittest.TestCase):

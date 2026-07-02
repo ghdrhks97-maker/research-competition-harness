@@ -37,14 +37,20 @@ SECTION_NS = "http://www.hancom.co.kr/hwpml/2011/section"
 BODY_PARA = 0
 HEADING_PARA = {1: 1, 2: 2, 3: 3, 4: 3, 5: 3, 6: 3}
 HEADING_CHAR = {1: 1, 2: 2, 3: 3, 4: 3, 5: 3, 6: 3}
-# Report styling: the first H1 becomes a large centered title, table header
-# rows get an accent-colored bold face on a shaded fill.
+# Report styling: the first H1 becomes a large centered title, chapter H1s
+# render as accent-filled bars (도비라), table header rows get an
+# accent-colored bold face on a shaded fill, and :::box directives become
+# shaded callout boxes.
 TITLE_PARA = 4
 TITLE_CHAR = 5
 TABLE_HEADER_PARA = 4  # centered
 TABLE_HEADER_CHAR = 4
+CHAPTER_BAR_CHAR = 6  # white bold on the accent bar
 ACCENT_COLOR = "#1F4E79"
 TABLE_HEADER_FILL = "#D9E2F3"
+BOX_FILL = "#EEF3FA"
+BOX_BORDER_FILL_ID = 3
+CHAPTER_BAR_FILL_ID = 4
 
 
 @dataclass
@@ -98,6 +104,34 @@ def _table(rows: list[list[str]]) -> str:
     return f'<hp:p paraPrIDRef="{BODY_PARA}" styleIDRef="0"><hp:run charPrIDRef="0">{"".join(parts)}</hp:run></hp:p>'
 
 
+def _single_cell_table(paragraphs: str, fill_id: int) -> str:
+    return (
+        f'<hp:p paraPrIDRef="{BODY_PARA}" styleIDRef="0"><hp:run charPrIDRef="0">'
+        f'<hp:tbl rowCnt="1" colCnt="1" borderFillIDRef="{fill_id}"><hp:tr>'
+        f'<hp:tc borderFillIDRef="{fill_id}"><hp:cellAddr colAddr="0" rowAddr="0"/>'
+        f'<hp:cellSpan colSpan="1" rowSpan="1"/><hp:subList>{paragraphs}</hp:subList></hp:tc>'
+        "</hp:tr></hp:tbl></hp:run></hp:p>"
+    )
+
+
+def _chapter_bar(text: str, level: int) -> str:
+    # Chapter heading on an accent-filled full-width bar; the inner paragraph
+    # keeps the heading paraPr id so toc matching still sees it as a heading.
+    heading = _paragraph(text, HEADING_PARA.get(level, 3), CHAPTER_BAR_CHAR)
+    return _single_cell_table(heading, CHAPTER_BAR_FILL_ID)
+
+
+def _callout_box(title: str, lines: list[str]) -> str:
+    paragraphs: list[str] = []
+    if title:
+        paragraphs.append(_paragraph(title, BODY_PARA, 2))
+    for line in lines:
+        paragraphs.append(_paragraph(line, BODY_PARA, 0))
+    if not paragraphs:
+        return ""
+    return _single_cell_table("".join(paragraphs), BOX_BORDER_FILL_ID)
+
+
 def _blocks_to_section(blocks: list[Block], images_root: Path, result: BuildResult) -> str:
     body: list[str] = []
     bin_index = 0
@@ -107,6 +141,8 @@ def _blocks_to_section(blocks: list[Block], images_root: Path, result: BuildResu
             if block.level == 1 and title_pending:
                 body.append(_paragraph(block.text, TITLE_PARA, TITLE_CHAR))
                 title_pending = False
+            elif block.level == 1:
+                body.append(_chapter_bar(block.text, block.level))
             else:
                 body.append(
                     _paragraph(block.text, HEADING_PARA.get(block.level, 3), HEADING_CHAR.get(block.level, 3))
@@ -117,6 +153,10 @@ def _blocks_to_section(blocks: list[Block], images_root: Path, result: BuildResu
         elif block.kind == "table":
             body.append(_table(block.rows))
             result.table_count += 1
+        elif block.kind == "box":
+            rendered = _callout_box(block.text, block.items)
+            if rendered:
+                body.append(rendered)
         elif block.kind == "list":
             for item in block.items:
                 prefix = "• "
@@ -148,17 +188,18 @@ def _header_xml() -> str:
         "<hh:refList>"
         '<hh:fontfaces itemCnt="1"><hh:fontface lang="HANGUL" fontCnt="1">'
         '<hh:font id="0" face="함초롬바탕" type="TTF" isEmbedded="0"/></hh:fontface></hh:fontfaces>'
-        '<hh:charProperties itemCnt="6">'
+        '<hh:charProperties itemCnt="7">'
         + "".join(
             _char_property(index, height, bold, color)
             for index, (height, bold, color) in enumerate(
                 [
                     (1000, 0, "#000000"),  # 0 body
                     (1600, 1, ACCENT_COLOR),  # 1 H1 장 제목
-                    (1300, 1, ACCENT_COLOR),  # 2 H2
+                    (1300, 1, ACCENT_COLOR),  # 2 H2 / box title
                     (1100, 1, "#000000"),  # 3 H3+
                     (1000, 1, ACCENT_COLOR),  # 4 table header
                     (2000, 1, ACCENT_COLOR),  # 5 document title
+                    (1600, 1, "#FFFFFF"),  # 6 chapter bar (white on accent)
                 ]
             )
         )
@@ -171,7 +212,7 @@ def _header_xml() -> str:
         + "</hh:paraProperties>"
         '<hh:styles itemCnt="1"><hh:style id="0" type="PARA" name="바탕글" engName="Normal" '
         'paraPrIDRef="0" charPrIDRef="0" nextStyleIDRef="0"/></hh:styles>'
-        '<hh:borderFills itemCnt="3">'
+        '<hh:borderFills itemCnt="5">'
         '<hh:borderFill id="0" threeD="0" shadow="0"/>'
         '<hh:borderFill id="1" threeD="0" shadow="0">'
         '<hh:leftBorder type="SOLID" width="0.12 mm" color="#000000"/>'
@@ -185,6 +226,20 @@ def _header_xml() -> str:
         '<hh:topBorder type="SOLID" width="0.12 mm" color="#000000"/>'
         '<hh:bottomBorder type="SOLID" width="0.12 mm" color="#000000"/>'
         f'<hh:fillBrush><hh:winBrush faceColor="{TABLE_HEADER_FILL}" hatchColor="{ACCENT_COLOR}" alpha="0"/></hh:fillBrush>'
+        "</hh:borderFill>"
+        f'<hh:borderFill id="{BOX_BORDER_FILL_ID}" threeD="0" shadow="0">'
+        f'<hh:leftBorder type="SOLID" width="0.4 mm" color="{ACCENT_COLOR}"/>'
+        f'<hh:rightBorder type="SOLID" width="0.4 mm" color="{ACCENT_COLOR}"/>'
+        f'<hh:topBorder type="SOLID" width="0.4 mm" color="{ACCENT_COLOR}"/>'
+        f'<hh:bottomBorder type="SOLID" width="0.4 mm" color="{ACCENT_COLOR}"/>'
+        f'<hh:fillBrush><hh:winBrush faceColor="{BOX_FILL}" hatchColor="{ACCENT_COLOR}" alpha="0"/></hh:fillBrush>'
+        "</hh:borderFill>"
+        f'<hh:borderFill id="{CHAPTER_BAR_FILL_ID}" threeD="0" shadow="0">'
+        f'<hh:leftBorder type="SOLID" width="0.12 mm" color="{ACCENT_COLOR}"/>'
+        f'<hh:rightBorder type="SOLID" width="0.12 mm" color="{ACCENT_COLOR}"/>'
+        f'<hh:topBorder type="SOLID" width="0.12 mm" color="{ACCENT_COLOR}"/>'
+        f'<hh:bottomBorder type="SOLID" width="0.12 mm" color="{ACCENT_COLOR}"/>'
+        f'<hh:fillBrush><hh:winBrush faceColor="{ACCENT_COLOR}" hatchColor="{ACCENT_COLOR}" alpha="0"/></hh:fillBrush>'
         "</hh:borderFill>"
         "</hh:borderFills>"
         "</hh:refList></hh:head>"

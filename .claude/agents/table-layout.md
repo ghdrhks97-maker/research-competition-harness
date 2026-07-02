@@ -10,7 +10,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 - `lanes/draft-writer/agent/lane-output.md`, `lanes/reference-miner/agent/lane-output.md`
 
 ## 산출물 (lanes/table-layout/agent/ 4개)
-- `lane-output.md` — table-map, 페이지 흐름 계획, 캡션 목록, 압축 대상. 긴 문단→3~5열 표/단계 카드. 표 뒤 해석 문단 유지. 표 제목·번호·캡션 통일.
+- `lane-output.md` — table-map, 페이지 흐름 계획, 캡션 목록, 압축 대상. 긴 문단→3~5열 표/단계 카드. 표 뒤 해석 문단 유지. 표 제목·번호·캡션 통일. 강조 내용(연구 질문·모형 정의·핵심 결과)은 `:::box 제목` ... `:::` 지시문으로 색 박스화, 항목 앞 ▶ ◆ ■ 글리프 활용.
 - `lane-output.json`, `claim-ledger.json`, `verdict.json`
 
 ## 금지

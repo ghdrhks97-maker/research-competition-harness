@@ -267,6 +267,25 @@ def compute_next(
                 notes=errors,
             )
 
+    # Phase 6 — design iterations (hwpx-designer) on the validated HWPX.
+    design_logged = any(workspace.glob("lanes/finalizer/*/evidence/design-iterations.md"))
+    if not design_logged:
+        return NextPlan(
+            phase="phase6-design",
+            actions=[
+                {
+                    "kind": "delegate",
+                    "lane": "finalizer",
+                    "role": "hwpx-designer",
+                    "detail": (
+                        "rch hwpx-unpack → XML 편집(표지·장 도비라·색 박스·아이콘 글리프·카드형 요약) → "
+                        "rch hwpx-pack(자동 검증) 반복(≤10회). 반복본은 output/iterations/, "
+                        "로그는 lanes/finalizer/*/evidence/design-iterations.md"
+                    ),
+                }
+            ],
+        )
+
     notes = [
         "output/report.hwpx 완성. 한컴/HOP에서 페이지 수·표 흐름·이미지·목차를 사람이 최종 확인해야 합니다."
     ]

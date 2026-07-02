@@ -22,10 +22,11 @@ GEMINI.md                              # AGENTS.md 포인터
 .claude/
   skills/deep-interview/SKILL.md       # 대화형 인터뷰(가장 먼저 실행)
   skills/report-orchestrator/SKILL.md  # Claude Code 진입점
-  agents/                              # 13개 전문 서브에이전트
+  agents/                              # 14개 전문 서브에이전트
     brainstorm · reference-miner · background-researcher · photo-curator
     survey-analyst · evidence-curator · draft-writer · table-layout
     summary-sheet · toc-builder · appendix-builder · critic · finalizer
+    hwpx-designer                      # 디자인 반복 (hwpx-unpack/pack 루프)
 ```
 
 ## 런타임 적응
