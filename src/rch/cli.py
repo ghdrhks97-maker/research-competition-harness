@@ -688,7 +688,9 @@ def run_lanes_cmd(workspace: Path, agent: str, lanes: list[str] | None, execute:
 # forbidden words, skipped-content notes, or the writer's planning memo.
 BUILD_GATE_MARKERS = (*FINAL_FORBIDDEN, "(생략", "삽입 예정", "분량 계획표:", "확정한다.]")
 # A body this thin is a skeleton, not a report (chars ≈ pages * 1600).
-BUILD_GATE_MIN_CHARS = 8000
+# 대회 규정(기본 25쪽 상한)을 "최대한 채우는" 것이 목표이므로 하한을
+# 약 10쪽 수준으로 잡는다 — 이보다 얇으면 요약 골격이지 보고서가 아니다.
+BUILD_GATE_MIN_CHARS = 16000
 FORCE_PREVIEW_HWPX = "report-preview.hwpx"
 
 
@@ -703,8 +705,9 @@ def _build_quality_gate(bundle_paths: list[Path]) -> list[str]:
                 findings.append(f"{path.name}: 미완성 마커 '{marker}' 발견")
     if total_chars < BUILD_GATE_MIN_CHARS:
         findings.append(
-            f"본문 전체 {total_chars}자 — 최소 기준 {BUILD_GATE_MIN_CHARS}자 미만(약 5쪽). "
-            "draft-writer가 규정 분량까지 집필해야 합니다."
+            f"본문 전체 {total_chars}자 — 최소 기준 {BUILD_GATE_MIN_CHARS}자 미만(약 10쪽). "
+            "draft-writer가 lane-input의 '분량 예산'(장별 목표 분량)과 "
+            "input/research의 '장별 배치 제안' 자료를 활용해 규정 분량까지 집필해야 합니다."
         )
     return findings
 
@@ -1493,7 +1496,12 @@ def main(argv: list[str] | None = None) -> int:
     background_p = sub.add_parser("research-background", help="collect theory/background/prior research with public adaptive routes")
     background_p.add_argument("workspace")
     background_p.add_argument("--query", help="override topic/query instead of reading brainstorm output")
-    background_p.add_argument("--max-results", type=int, default=8)
+    background_p.add_argument(
+        "--max-results",
+        type=int,
+        default=background_mod.DEFAULT_MAX_RESULTS,
+        help="장별 배치까지 고려한 수집 목표 건수 (기본 24 — 25쪽 분량 채움용)",
+    )
     background_p.add_argument("--offline", action="store_true", help="skip network routes and write verification-needed fallback")
 
     draft_p = sub.add_parser("draft", help="generate body/summary/toc/appendix drafts")

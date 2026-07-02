@@ -34,7 +34,7 @@
 | `rch go <ws> --skeleton` | 레거시 골격 생성. 완성 보고서용 아님. 기본 호출은 거부 | placeholder 중심 skeleton + 보강표 |
 | `rch import-rules <ws> <files...>` | 대회 공문·심사표·보고서 양식을 `input/rules/`에 복사하고 manifest 생성 | `input/rules/rules-manifest.json` |
 | `rch brainstorm <ws>` | 대회명 → 분야/교과 인터뷰 → 연구 동향 리서치 → 연구 주제·제목 자동 생성. 사람이 ideas 파일을 직접 쓰지 않음 | `input/ideas/` + `input/rules/competition-profile.json` |
-| `rch research-background <ws>` | insane-search 방식의 public-route scheduler로 이론적 배경·선행연구 후보 수집(OpenAlex/CrossRef/arXiv/Jina route → fallback) | `input/research/` + reference-miner lane |
+| `rch research-background <ws>` | insane-search 방식의 public-route scheduler로 이론적 배경·선행연구 후보 수집(OpenAlex/Semantic Scholar/CrossRef/arXiv/한국어 위키/Jina route → fallback). 보고서 장(I~V)별 질의·태깅으로 기본 24건을 모아 분량 채움용 '장별 배치 제안'을 만든다 | `input/research/` + reference-miner lane |
 | `rch import-survey <ws> <file>` | 사전·사후 설문 CSV/TSV/XLSX 익명 분석(평균·변화량·Cohen's d·t검정 p값·자유응답 요약·소표본 한계) | `input/surveys/analysis/` |
 | `rch import-photos <ws>` | 사진 매니페스트 + 개인정보 점검표(본문/요약/부록/제외 분류, 블러 지시) | `input/photos/analysis/` |
 | `rch mine-references <ws>` | 레퍼런스 보고서에서 목차·표 밀도·부록 패턴 등 **구조만** 추출 | `input/references/analysis/` |
@@ -249,10 +249,14 @@ input/rules/templates/  그 외 참고 양식
 `rch research-background`는 `insane-search` 방식에서 가져온 원칙을 보고서용 리서치에 적용합니다.
 
 - 한 번의 fetch 성공으로 끝내지 않고 route log를 남깁니다.
-- Phase 0: OpenAlex, CrossRef, arXiv 같은 공개 API를 먼저 씁니다.
-- Phase 1: Jina public search reader route를 시도합니다.
+- Phase 0: OpenAlex, Semantic Scholar, CrossRef, arXiv 같은 공개 API를 먼저 씁니다.
+- Phase 1: 한국어 위키백과(용어 정의), Jina public search reader route를 시도합니다.
 - 실패하면 local curated fallback을 쓰되 `needs-work`로 표시합니다.
 - 로그인·페이월·개인자료 접근은 하지 않습니다.
+- 질의는 보고서 장(I 필요성 ~ V 제언)별로 한국어·영어 쌍을 만들고, 수집 결과를 장별로 태깅해
+  `04-background-research.md`의 **장별 배치 제안** 표로 냅니다. draft-writer는 이 표와
+  lane-input의 **분량 예산**(장별 목표 쪽수, 본문 25쪽 기준 90% 이상)을 함께 사용해
+  분량 규정을 채웁니다. 장별 쿼터 배분으로 한 질의가 결과를 독식하지 않습니다.
 - 공개 웹 본문은 untrusted source material로 취급하고, 보고서에는 요약·근거 후보로만 반영합니다.
 
 산출물:

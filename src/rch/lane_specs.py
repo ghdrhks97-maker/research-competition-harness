@@ -170,9 +170,19 @@ LANE_SPECS: "OrderedDict[str, LaneSpec]" = OrderedDict(
                 "process": [
                     "I~V장 흐름으로 필요성, 준비, 설계, 실행, 결과, 제언을 연결한다.",
                     "이론적 배경과 선행연구는 `input/research/background-research.json`의 출처를 확인해 표로 요약한다.",
+                    "`input/research/04-background-research.md`의 '장별 배치 제안' 자료를 장마다 2건 이상 재서술로 녹여 분량 예산에 도달할 때까지 확장한다.",
                     "표가 말하고 본문이 해석하는 구조로 쓴다.",
                     "각 문단의 핵심 claim을 claim-ledger와 맞춘다.",
                     "AI 티가 나는 대구, 과도한 강조, 빈 수식어, 반복 키워드를 줄인다.",
+                    "분량을 채우려 같은 문장·주장을 반복하지 않는다. 새 근거·새 장면·새 해석으로만 늘린다.",
+                ],
+                "length_budget": [
+                    "본문 전체(표지·요약·목차·부록 제외): 대회 규정 상한(기본 25쪽)의 90% 이상 — 약 3만 자.",
+                    "I. 필요성 및 목적: 2~3쪽 — 문제 상황 서사, 연구 질문, 운영 개요 표.",
+                    "II. 이론적 배경 및 실태: 4~5쪽 — 용어 정의 표, 선행연구 종합, 학급 실태 분석.",
+                    "III. 수업 설계 및 실천 과제: 5~6쪽 — 수업 모형, 과제별 설계 표, 차시 계획.",
+                    "IV. 실천 과정 및 결과: 8~10쪽 — 과제별 실행 서사, 산출물 해석, 설문 표, 질적 인용.",
+                    "V. 결론 및 제언: 2~3쪽 — 요약, 일반화 가능성, 확산 계획.",
                 ],
                 "outputs": [
                     "report body markdown",
@@ -381,6 +391,11 @@ def render_lane_input(lane: str, agent: str) -> str:
             "",
             *[f"{index}. {item}" for index, item in enumerate(spec["process"], 1)],
             "",
+            *(
+                ["## 분량 예산", "", *[f"- {item}" for item in spec["length_budget"]], ""]
+                if spec.get("length_budget")
+                else []
+            ),
             "## 필수 산출물",
             "",
             "- `lane-output.md`",
