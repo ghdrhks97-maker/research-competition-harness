@@ -40,7 +40,7 @@
 - **`background-researcher`** — insane 리서치로 이론적 배경·선행연구 조사(공개 학술·웹, 인용 날조 금지).
 - **`photo-curator`** — 사진 개인정보 실제 검토·분류.
 - **`evidence-curator`** — 주장↔증거 연결, claim 상태.
-- 설문: 오케스트레이터가 먼저 **`rch import-survey <ws> <csv>`**(파이썬 통계) 실행 → **`survey-analyst`** 에이전트가 그 수치를 해석·서술(숫자 안 만듦).
+- 설문: 실제 CSV가 있으면 **`rch import-survey <ws> <csv>`**(파이썬 통계) 실행 → **`survey-analyst`** 가 그 수치를 해석. **실제 설문이 없으면** `survey-analyst`가 "바라는 결과"에 근거한 **예상 설문값(가상)** 을 만들어 보고서를 완성하고, 실제값 교체용 CSV 템플릿을 남긴다.
 
 ### Phase 2 — 본문 집필 (에이전트)
 **`draft-writer`** 가 Phase 1 산출물을 모두 읽고 I~V장 본문을 집필(표 중심·최종 진술형). 설문 수치는 `input/surveys/analysis/`에서만 인용.
@@ -58,14 +58,18 @@
 
 `brainstorm`, `reference-miner`, `background-researcher`, `photo-curator`, `survey-analyst`, `evidence-curator`, `draft-writer`, `table-layout`, `summary-sheet`, `toc-builder`, `appendix-builder`, `critic`, `finalizer`. 각 에이전트는 `lanes/<lane>/agent/`에 계약 파일 4종(`lane-output.md`, `lane-output.json`, `claim-ledger.json`, `verdict.json`)을 **진짜 내용**으로 채운다.
 
+## 완성 원칙: 자료가 없어도 예상값으로 완성한다
+
+설문·사진이 없다고 멈추거나 대괄호 빈칸을 남기지 않는다. **"바라는 결과"에 근거한 예상값(가상)으로 보고서를 완성**하고, 나중에 실제값으로 교체할 수 있게 남긴다. 단 예상값은 아래 규칙을 지킨다.
+
 ## 안전 규칙 (전 역할 강제)
 
-- 증거 없는 설문 수치·학생 발화·수업 결과·확산 실적·인용을 **지어내지 않는다.** 불확실하면 `placeholder`.
-- 설문 수치는 `rch import-survey`가 낸 `input/surveys/analysis/` 값만 인용.
-- `unreviewed`/`high` 위험 사진은 본문·부록에 넣지 않는다.
-- 레퍼런스·웹 문장을 복사하지 않는다(구조·근거 후보만).
-- 최종 본문에 예정/추후/초안/미정/TODO 금지.
-- HWPX 조립은 finalizer 한 번만. 구조 통과(render-check) ≠ Hancom 실제 표시(사람이 한컴에서 확인).
+- **실제 조사 결과가 없는 수치·발화·인용은 지어내되 반드시 "예상값(가상)"으로 명확히 라벨링하고 `status: placeholder`로 둔다.** 절대 `real`/`derived`로 표시하거나 "측정되었다"처럼 실제인 것처럼 쓰지 않는다. 예상값은 교육적으로 보수적이어야 한다(과장 금지).
+- 실제 설문 수치는 `rch import-survey`가 낸 `input/surveys/analysis/` 값만 `derived`로 인용. 실제값이 들어오면 예상값을 교체한다.
+- `unreviewed`/`high` 위험 사진은 본문·부록에 넣지 않는다. 사진이 없으면 "사진첨부필요" 자리표시로 진행한다.
+- 레퍼런스·웹 문장을 복사하지 않는다(구조·근거 후보만). 존재하지 않는 논문·저자·DOI를 만들지 않는다.
+- 최종 본문에 예정/추후/초안/미정/TODO 금지(단 "예상값(가상)" 라벨은 draft에서 허용).
+- HWPX 조립은 finalizer 한 번만. **HWPX/XML을 손으로 쓰지 말고 `rch build-hwpx`만** 쓴다. 구조 통과(render-check) ≠ Hancom 실제 표시(사람이 한컴에서 확인). 렌더 품질은 finalizer가 강하게 책임진다.
 
 ## 사용량
 
