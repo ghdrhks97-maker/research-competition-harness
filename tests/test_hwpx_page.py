@@ -289,7 +289,8 @@ class BuildGateTests(unittest.TestCase):
             workspace = self._workspace_with_bundle(tmp, "# 제목\n\n짧은 본문\n")
             code = main(["build-hwpx", str(workspace), "--force"])
             self.assertEqual(code, 0)
-            self.assertTrue((workspace / "output" / "report.hwpx").exists())
+            self.assertFalse((workspace / "output" / "report.hwpx").exists())
+            self.assertTrue((workspace / "output" / "report-preview.hwpx").exists())
 
 
 class KordocEngineTests(unittest.TestCase):

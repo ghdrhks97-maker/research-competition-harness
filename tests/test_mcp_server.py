@@ -55,8 +55,11 @@ class McpOpsTests(unittest.TestCase):
             # …and force=True still allows an inspection build.
             hwpx = mcp_server.op_build_hwpx(workspace, force=True)
             self.assertTrue(Path(hwpx["hwpx"]).exists())
+            self.assertEqual(Path(hwpx["hwpx"]).name, "report-preview.hwpx")
+            self.assertTrue(hwpx["preview"])
+            self.assertFalse((Path(workspace) / "output" / "report.hwpx").exists())
 
-            render = mcp_server.op_render_check(workspace)
+            render = mcp_server.op_render_check(workspace, hwpx=hwpx["hwpx"])
             self.assertIn("estimated_pages", render)
 
             backlog = mcp_server.op_revise_loop(workspace)

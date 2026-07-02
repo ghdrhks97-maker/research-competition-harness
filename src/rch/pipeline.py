@@ -236,22 +236,7 @@ def compute_next(
     render = _read_json(output_dir / "render-check.json")
     render_ok = bool(isinstance(render, dict) and render.get("ok"))
     status, _ = _lane_status(workspace, "finalizer")
-    if not (bundle_ready and hwpx_ready and render_ok and status == LANE_PASS):
-        return NextPlan(
-            phase="phase5-finalize",
-            actions=[
-                _delegate(
-                    "finalizer",
-                    "소스 위생 → rch assemble → rch check --final"
-                    f"{gate_flag} → rch build-hwpx → rch render-check (통과까지 반복 ≤4회)",
-                )
-            ],
-            notes=["예상값(가상) claim이 있어 final 게이트는 --allow-expected 모드"]
-            if allow_expected
-            else [],
-        )
-
-    if final_check is not None:
+    if final_check is not None and bundle_ready:
         result = final_check(workspace, final=True, allow_expected=allow_expected)
         if not getattr(result, "ok", False):
             errors = [str(err) for err in getattr(result, "errors", [])][:10]
@@ -266,6 +251,20 @@ def compute_next(
                 ],
                 notes=errors,
             )
+    if not (bundle_ready and hwpx_ready and render_ok and status == LANE_PASS):
+        return NextPlan(
+            phase="phase5-finalize",
+            actions=[
+                _delegate(
+                    "finalizer",
+                    "소스 위생 → rch assemble → rch check --final"
+                    f"{gate_flag} → rch build-hwpx → rch render-check (통과까지 반복 ≤4회)",
+                )
+            ],
+            notes=["예상값(가상) claim이 있어 final 게이트는 --allow-expected 모드"]
+            if allow_expected
+            else [],
+        )
 
     # Phase 6 — design iterations (hwpx-designer) on the validated HWPX.
     design_logged = any(workspace.glob("lanes/finalizer/*/evidence/design-iterations.md"))
