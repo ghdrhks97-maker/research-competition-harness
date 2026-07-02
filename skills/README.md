@@ -4,7 +4,9 @@
 
 | 단계 | 스킬 | 명령 |
 | --- | --- | --- |
-| 빠른 시작 | rch-go | `rch go` (양식 import → 브레인스토밍 → 배경연구 → placeholder → 초안 → HWPX) |
+| 지휘 | agent-harness-skill | `rch agent-harness` |
+| 자동 진행 | report-orchestrator | `rch next` 루프 |
+| 레거시 골격 | rch-go | `rch go --skeleton` (완성 보고서용 아님) |
 | 0 | agent-runner-skill | `rch agents preflight` / `rch agents run` |
 | 1 | brainstorm-skill | `rch brainstorm` (대회명 → 분야 인터뷰 → 동향 → 주제·제목 → input/ideas) |
 | 2 | research-background-skill | `rch research-background` |
@@ -20,10 +22,11 @@
 | 12 | hancom-render-qa-skill | `rch render-check` |
 | 루프 | (품질 루프) | `rch revise-loop` |
 
-## 한 번에 도는 흐름
+## 에이전트 지휘 흐름
 
 ```bash
-rch go 2026-competition --competition-name "창의교육 연구대회" --major 과학 --interests "AI, 탐구" --competency 탐구력
+rch agent-harness 2026-competition --agent codex --agent claude --offline-research
+rch next 2026-competition
 ```
 
 세부 단계 직접 실행:

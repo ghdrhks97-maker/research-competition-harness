@@ -50,6 +50,44 @@ STATUS_AUTHENTICATED = "authenticated"
 STATUS_UNAUTHENTICATED = "unauthenticated"
 STATUS_UNKNOWN = "unknown"
 
+# Usage isolation: when the harness itself is running inside an agent app,
+# LLM work must stay on that app's own quota. Cross-calling a *different*
+# agent CLI is refused unless the user opts in with RCH_ALLOW_CROSS_AGENT=1.
+HOST_RUNTIME_ENV = "RCH_HOST_RUNTIME"
+ALLOW_CROSS_AGENT_ENV = "RCH_ALLOW_CROSS_AGENT"
+_HOST_ENV_HINTS: dict[str, tuple[str, ...]] = {
+    "claude": ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"),
+    "codex": ("CODEX_SANDBOX", "CODEX_HOME", "CODEX_THREAD_ID", "CODEX_PROXY_PORT"),
+    "antigravity": ("ANTIGRAVITY", "ANTIGRAVITY_HOME", "ANTIGRAVITY_AGENT"),
+}
+
+
+def detect_host_runtime() -> str | None:
+    """Best-effort detection of the agent app this process is running inside."""
+    override = os.environ.get(HOST_RUNTIME_ENV, "").strip().lower()
+    if override in AGENT_REGISTRY:
+        return override
+    if override == "none":
+        return None
+    for runtime, hints in _HOST_ENV_HINTS.items():
+        if any(os.environ.get(hint) for hint in hints):
+            return runtime
+    return None
+
+
+def cross_agent_refusal(agent: str) -> str | None:
+    """Return a refusal message when calling `agent` would spend another app's quota."""
+    if os.environ.get(ALLOW_CROSS_AGENT_ENV, "").strip().lower() in {"1", "true", "yes"}:
+        return None
+    host = detect_host_runtime()
+    if host is None or agent == host:
+        return None
+    return (
+        f"사용량 격리: 현재 {host} 런타임 안에서 실행 중이므로 {agent} CLI 교차 호출을 막았습니다. "
+        f"LLM 작업은 구동 런타임({host})의 서브에이전트로 수행하세요. "
+        f"정말 교차 호출하려면 {ALLOW_CROSS_AGENT_ENV}=1 로 실행하세요."
+    )
+
 
 @dataclass
 class AgentStatus:
@@ -214,6 +252,9 @@ def run_agent_on_lane(
 ) -> RunResult:
     if agent not in AGENT_REGISTRY:
         raise SystemExit(f"unknown agent: {agent}")
+    refusal = cross_agent_refusal(agent)
+    if refusal:
+        return RunResult(agent, lane, False, "", refusal)
     spec = AGENT_REGISTRY[agent]
     binary = _resolve_bin(spec)
 

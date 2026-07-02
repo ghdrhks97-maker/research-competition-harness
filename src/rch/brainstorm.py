@@ -44,6 +44,27 @@ INTERVIEW: list[dict[str, Any]] = [
     {"key": "constraints", "q": "제약 조건은? (예: 총 12차시, 1학기 운영)", "required": False, "default": "미기재"},
 ]
 
+INTERVIEW_KEYS: tuple[str, ...] = tuple(item["key"] for item in INTERVIEW)
+
+
+@dataclass
+class CoreCompetency:
+    name: str
+    keywords: tuple[str, ...]
+
+
+# 2022 개정 교육과정 6대 핵심역량. 연구 주제·제목은 이 중 하나 이상과 반드시 연계한다.
+CORE_COMPETENCIES_2022: list[CoreCompetency] = [
+    CoreCompetency("자기관리 역량", ("자기관리", "자기주도", "자율", "자기조절", "진로", "자기이해", "주도성", "메타인지", "성찰")),
+    CoreCompetency("지식정보처리 역량", ("지식정보", "정보처리", "데이터", "문제해결", "탐구", "분석", "비판적", "자료", "디지털", "컴퓨팅", "정보", "통계")),
+    CoreCompetency("창의적 사고 역량", ("창의", "창의융합", "융합", "상상", "도전", "독창", "산출", "메이커", "디자인", "발상")),
+    CoreCompetency("심미적 감성 역량", ("심미", "감성", "예술", "미적", "공감", "정서", "표현", "감상", "음악", "미술", "문학", "체육")),
+    CoreCompetency("협력적 소통 역량", ("협력", "소통", "의사소통", "협업", "공유", "토의", "토론", "배려", "관계", "발표", "경청")),
+    CoreCompetency("공동체 역량", ("공동체", "시민", "참여", "책임", "다양성", "지속가능", "환경", "연대", "생태", "민주", "세계")),
+]
+
+DEFAULT_CORE_COMPETENCY = "창의적 사고 역량"
+
 
 @dataclass
 class Trend:
@@ -76,6 +97,7 @@ class TopicCandidate:
     practical_tasks: list[str]
     score: int
     rationale: str
+    core_competency: str = DEFAULT_CORE_COMPETENCY
 
 
 @dataclass
@@ -85,6 +107,7 @@ class BrainstormBundle:
     topics: list[TopicCandidate]
     recommended_topic: str
     titles: list[str]
+    core_competencies: list[str] = field(default_factory=list)
     agent_augmented: bool = False
 
     def to_dict(self) -> dict[str, Any]:
@@ -114,6 +137,29 @@ def _tokens(text: str) -> set[str]:
     return {token.strip().lower() for token in text.replace(",", " ").split() if token.strip()}
 
 
+def link_core_competencies(answers: dict[str, str], trend_name: str = "", limit: int = 2) -> list[str]:
+    """Map interview answers (and optional trend) to 2022 개정 핵심역량.
+
+    Always returns at least one competency so every topic/title stays linked
+    to the revised national curriculum.
+    """
+    competency_text = answers.get("competency", "")
+    tokens = _tokens(competency_text) | _tokens(answers.get("interests", "")) | _tokens(trend_name)
+    scored: list[tuple[int, int, str]] = []
+    for index, competency in enumerate(CORE_COMPETENCIES_2022):
+        score = 0
+        stem = competency.name.replace(" 역량", "")
+        if stem and stem in competency_text:
+            score += 3
+        for keyword in competency.keywords:
+            if any(keyword in token or token in keyword for token in tokens):
+                score += 1
+        scored.append((-score, index, competency.name))
+    scored.sort()
+    linked = [name for neg_score, _, name in scored if neg_score < 0][:limit]
+    return linked or [DEFAULT_CORE_COMPETENCY]
+
+
 def rank_trends(answers: dict[str, str]) -> list[tuple[Trend, int]]:
     major = answers.get("major", "").strip()
     interest_tokens = _tokens(answers.get("interests", "")) | _tokens(answers.get("competency", "")) | _tokens(answers.get("tools", ""))
@@ -140,18 +186,23 @@ def synthesize_topics(answers: dict[str, str], ranked: list[tuple[Trend, int]], 
     topics: list[TopicCandidate] = []
     for trend, score in ranked[:limit]:
         tool_clause = f" {tools}을(를) 활용해" if tools and tools != "미기재" else ""
+        core = link_core_competencies(answers, trend.name)[0]
         topics.append(
             TopicCandidate(
                 trend=trend.name,
                 title_seed=f"{trend.name} 기반 {major} 수업",
-                research_question=f"{trend.name}을(를) 적용한{tool_clause} {major} 수업이 학생의 {competency} 신장에 어떤 영향을 주는가?",
+                research_question=(
+                    f"{trend.name}을(를) 적용한{tool_clause} {major} 수업이 학생의 {competency}"
+                    f"(2022 개정 핵심역량 '{core}') 신장에 어떤 영향을 주는가?"
+                ),
                 practical_tasks=[
                     f"실천1: {competition} 규정에 맞춘 {trend.name} 기반 {major} 연구 설계",
-                    f"실천2: 수업 단계별 {competency} 중심 활동·평가 개발",
+                    f"실천2: 수업 단계별 '{core}' 중심 활동·평가 개발",
                     f"실천3: {competition} 심사 기준에 맞춘 변화 근거와 일반화 가능성 정리",
                 ],
                 score=score,
-                rationale=f"{trend.summary} 대회({competition})·분야({major})·역량({competency}) 적합도 점수 {score}.",
+                rationale=f"{trend.summary} 대회({competition})·분야({major})·역량({competency}) 적합도 점수 {score}. 2022 개정 핵심역량 '{core}'와 연계.",
+                core_competency=core,
             )
         )
     return topics
@@ -162,13 +213,15 @@ def brainstorm_titles(topic: TopicCandidate, answers: dict[str, str]) -> list[st
     major = answers.get("major", "").strip() or "교과"
     competency = answers.get("competency", "").strip() or "핵심 역량"
     trend = topic.trend
+    core = topic.core_competency
+    core_stem = core.replace(" 역량", "")
     acronym = _acronym(trend, competency)
     return [
         f"『{acronym}』: {trend}으로 {competency}을(를) 키우는 {major} 연구",
-        f"{competition}을 위한 {major} 연구: {trend} 기반 {competency} 신장 사례",
-        f"{major} 현장의 전환 — {trend} 기반 {competency} 중심 연구",
+        f"{competition}을 위한 {major} 연구: 2022 개정 '{core}' 신장을 위한 {trend} 실천",
+        f"{major} 현장의 전환 — {trend} 기반 {core_stem} 중심 연구",
         f"묻고 만들고 나누다: {major} 속 {trend}로 기르는 {competency}",
-        f"{competency}을(를) 위한 {trend} 연구 모형 개발과 적용: {major} 사례",
+        f"'{core}'과(와) {competency}을(를) 잇는 {trend} 연구 모형 개발: {major} 사례",
     ]
 
 
@@ -185,12 +238,14 @@ def build_bundle(answers: dict[str, str]) -> BrainstormBundle:
     topics = synthesize_topics(answers, ranked)
     recommended = topics[0] if topics else None
     titles = brainstorm_titles(recommended, answers) if recommended else []
+    core_competencies = link_core_competencies(answers, recommended.trend if recommended else "")
     return BrainstormBundle(
         answers=answers,
         trends=[{"name": trend.name, "summary": trend.summary, "score": score} for trend, score in ranked[:5]],
         topics=topics,
         recommended_topic=recommended.title_seed if recommended else "",
         titles=titles,
+        core_competencies=core_competencies,
     )
 
 
@@ -226,12 +281,18 @@ def render_trend_md(bundle: BrainstormBundle) -> str:
 
 def render_topics_md(bundle: BrainstormBundle) -> str:
     lines = ["# 연구 주제 후보", ""]
+    lines.append(f"- 참가 대회: {bundle.answers.get('competition_name', '연구대회')}")
+    lines.append(f"- 2022 개정 핵심역량 연계: {', '.join(bundle.core_competencies)}")
+    lines.append("")
+    lines.append("> 모든 주제·제목은 2022 개정교육과정 핵심역량과 반드시 연계됩니다.")
+    lines.append("")
     for index, topic in enumerate(bundle.topics, 1):
         mark = " (추천)" if topic.title_seed == bundle.recommended_topic else ""
         lines += [
             f"## {index}. {topic.title_seed}{mark}",
             "",
             f"- 트렌드: {topic.trend}",
+            f"- 2022 개정 핵심역량: {topic.core_competency}",
             f"- 연구 질문: {topic.research_question}",
             f"- 적합도 점수: {topic.score}",
             f"- 근거: {topic.rationale}",
@@ -264,6 +325,7 @@ def _seed_brainstorm_lane(workspace: Path, bundle: BrainstormBundle) -> None:
         "",
         f"- 참가 대회: {bundle.answers.get('competition_name', '연구대회')}",
         f"- 연구 주제: {topic.title_seed}",
+        f"- 2022 개정 핵심역량 연계: {topic.core_competency}",
         f"- 연구 질문: {topic.research_question}",
         "- 실천 과제:",
         *[f"  - {task}" for task in topic.practical_tasks],
@@ -283,6 +345,7 @@ def _seed_brainstorm_lane(workspace: Path, bundle: BrainstormBundle) -> None:
             {"claims": [
                 {"id": "brainstorm-title", "text": f"추천 제목: {title}", "status": "placeholder", "notes": "사람 최종 선택 필요"},
                 {"id": "brainstorm-topic", "text": f"추천 주제: {topic.title_seed}", "status": "placeholder", "notes": "심사기준 대조 후 확정"},
+                {"id": "brainstorm-competency", "text": f"2022 개정 핵심역량 연계: {topic.core_competency}", "status": "placeholder", "notes": "성취기준·역량 연계 사람 확인"},
             ]},
             ensure_ascii=False, indent=2,
         ),

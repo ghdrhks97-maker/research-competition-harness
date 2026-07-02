@@ -17,10 +17,11 @@ Put only current competition inputs here. Do not commit raw student data.
 
 ## Flow
 
-Fast path:
+Agent-first path:
 
 ```bash
-rch go <workspace> --competition-name "창의교육 연구대회" --major 과학
+rch agent-harness <workspace> --agent codex --agent claude --offline-research
+rch next <workspace>
 ```
 
 Detailed path:
@@ -35,7 +36,8 @@ Detailed path:
 8. Run `rch check`.
 9. Run `rch assemble`.
 10. Run `rch check --final`.
-11. Hand the final bundle to one HWPX finalizer.
+11. Run `rch build-hwpx <workspace>` only after final gate passes.
+12. Hand `output/report.hwpx` to Hancom/HOP final visual check.
 
 ## Final Gate
 

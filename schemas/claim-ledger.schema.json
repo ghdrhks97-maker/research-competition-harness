@@ -14,7 +14,7 @@
           "text": { "type": "string" },
           "status": {
             "type": "string",
-            "enum": ["real", "placeholder", "derived", "forbidden"]
+            "enum": ["real", "placeholder", "derived", "expected", "forbidden"]
           },
           "evidence": { "type": "string" },
           "notes": { "type": "string" }

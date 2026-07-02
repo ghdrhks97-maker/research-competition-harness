@@ -144,6 +144,77 @@ class CliTests(unittest.TestCase):
             self.assertFalse(result.ok)
             self.assertTrue(any("not allowed" in err for err in result.errors))
 
+    def _set_expected_survey_claim(self, workspace: Path, text: str, notes: str = "") -> None:
+        lane = workspace / "lanes" / "survey-analyzer" / "codex"
+        claim: dict[str, str] = {"id": "survey-1", "text": text, "status": "expected"}
+        if notes:
+            claim["notes"] = notes
+        (lane / "claim-ledger.json").write_text(
+            json.dumps({"claims": [claim]}, ensure_ascii=False), encoding="utf-8"
+        )
+
+    def test_expected_claim_requires_label(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            init_workspace(workspace)
+            bootstrap_lanes(workspace, "codex")
+            self._write_final_ready_lanes(workspace)
+            self._set_expected_survey_claim(workspace, "탐구 흥미가 오를 것이다")
+
+            result = check_workspace(workspace)
+            self.assertFalse(result.ok)
+            self.assertTrue(any("label" in err for err in result.errors), result.errors)
+
+    def test_final_check_rejects_expected_without_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            init_workspace(workspace)
+            bootstrap_lanes(workspace, "codex")
+            self._write_final_ready_lanes(workspace)
+            self._set_expected_survey_claim(workspace, "탐구 흥미 사전 3.1 → 사후 4.0 (예상값·가상)")
+            assemble_workspace(workspace)
+
+            result = check_workspace(workspace, final=True)
+            self.assertFalse(result.ok)
+            self.assertTrue(any("--allow-expected" in err for err in result.errors), result.errors)
+
+    def test_final_check_allows_labeled_expected_with_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            init_workspace(workspace)
+            bootstrap_lanes(workspace, "codex")
+            self._write_final_ready_lanes(workspace)
+            self._set_expected_survey_claim(
+                workspace,
+                "탐구 흥미 사전 3.1 → 사후 4.0 (예상값·가상)",
+                notes="실제 설문 후 교체",
+            )
+            assemble_workspace(workspace)
+
+            result = check_workspace(workspace, final=True, allow_expected=True)
+            self.assertTrue(result.ok, result.errors)
+            self.assertTrue(any("expected" in warn for warn in result.warnings), result.warnings)
+            report = workspace / "output" / "expected-claims.md"
+            self.assertTrue(report.exists())
+            self.assertIn("탐구 흥미", report.read_text(encoding="utf-8"))
+
+    def test_final_check_allow_expected_still_rejects_placeholder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "competition"
+            init_workspace(workspace)
+            bootstrap_lanes(workspace, "codex")
+            self._write_final_ready_lanes(workspace)
+            lane = workspace / "lanes" / "survey-analyzer" / "codex"
+            (lane / "claim-ledger.json").write_text(
+                json.dumps({"claims": [{"id": "s1", "text": "빈 구멍", "status": "placeholder"}]}),
+                encoding="utf-8",
+            )
+            assemble_workspace(workspace)
+
+            result = check_workspace(workspace, final=True, allow_expected=True)
+            self.assertFalse(result.ok)
+            self.assertTrue(any("not allowed: placeholder" in err for err in result.errors), result.errors)
+
     def test_bootstrap_lanes_writes_report_production_guides(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "competition"
@@ -372,10 +443,16 @@ class CliTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            # Without --skeleton the legacy path refuses (agents kept off it).
+            with self.assertRaises(SystemExit) as ctx:
+                main(["go", str(workspace), "--answers", str(answers)])
+            self.assertIn("skeleton", str(ctx.exception))
+
             code = main(
                 [
                     "go",
                     str(workspace),
+                    "--skeleton",
                     "--answers",
                     str(answers),
                     "--rule-file",

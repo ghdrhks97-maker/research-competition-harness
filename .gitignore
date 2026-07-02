@@ -20,3 +20,8 @@ build/
 **/output/*
 !**/.gitkeep
 !examples/synthetic/**
+
+# Claude Code runtime artifacts
+.claude/scheduled_tasks.json
+.claude/scheduled_tasks.lock
+.claude/settings.local.json

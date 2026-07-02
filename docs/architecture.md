@@ -15,7 +15,9 @@ It currently:
 
 It now also ships a generation engine, a render engine, and a quality loop:
 
-- `go`: short autopilot command/tool. Runs init, optional rule/form import, brainstorm, background research, missing-input placeholders, survey/photo/reference processing, draft, assemble, HWPX build, render check, and revise loop. Missing survey/photos produce placeholder tables, not fake evidence.
+- `agent-harness`: writes a conductor pack for Codex/Claude/AGY before or during a long competition run. It captures current inputs, missing evidence, lane order, exact CLI commands, quality gates, and anti-fabrication rules in `output/agent-harness.json`, `output/agent-harness.md`, and `prompts/conductor/agent-harness.md`.
+- `next`: deterministic autopilot state machine. After interview/plan approval, the hosting agent app repeatedly calls it and executes returned run/delegate actions until `done=true`.
+- `go`: legacy skeleton command/tool. It is blocked by default and runs only with explicit `--skeleton`; it is not a finished-report path.
 - `import-rules`: copies annual or contest-specific notices, rubrics, report templates, and form files into `input/rules/` with hashes and a manifest so agents can reference real contest rules.
 - `brainstorm`: the starting step. First asks which research competition the user will enter, then runs a subject/field interview, ranks current education trends by fit, synthesizes scored research-topic candidates, brainstorms report titles, and writes them into `input/ideas/` plus `input/rules/competition-profile.json`. Interactive on stdin, or scripted via `--answers`, or agent-augmented via `--agent`.
 - `research-background`: insane-search inspired public-route scheduler for theory/prior-research collection. It tries public academic APIs first, then public reader/search routes, records route logs, stops at auth/paywall boundaries, and writes report-safe summaries into `input/research/`.
@@ -23,7 +25,7 @@ It now also ships a generation engine, a render engine, and a quality loop:
 - `import-photos`: photo manifest + privacy checklist (safe-by-default `unreviewed`, blur instructions, body/summary/appendix/exclude placement).
 - `mine-references`: structure-only extraction (outline, table density, appendix pattern) from `.md`/`.txt`/`.hwpx` references.
 - `draft`: composes I~V body, summary, TOC, and appendix drafts from the analyses into the writing lanes with claim tags.
-- `build-hwpx`: renders the assembled markdown bundle into an OWPML `.hwpx` container (headings, paragraphs, GFM tables, TOC, image embedding).
+- `build-hwpx`: renders only a final-gate-passing assembled markdown bundle into an OWPML `.hwpx` container (headings, paragraphs, GFM tables, TOC, image embedding). `--force` is for diagnostic builds only.
 - `render-check`: validates the `.hwpx` zip/OWPML structure, XML well-formedness, page estimate, table integrity, and TOC-vs-body heading match.
 - `revise-loop`: merges critic, check, and render-check feedback into one prioritized revision backlog.
 - `run-lanes`: builds per-lane prompt bundles for external agents (Codex/Antigravity/Claude); `--execute` verifies login then dispatches.
@@ -59,7 +61,8 @@ Main commands:
 
 ```bash
 PYTHONPATH=src python3 -m rch.cli init <workspace>
-PYTHONPATH=src python3 -m rch.cli go <workspace> --competition-name "창의교육 연구대회" --major 과학
+PYTHONPATH=src python3 -m rch.cli agent-harness <workspace> --agent codex --agent claude
+PYTHONPATH=src python3 -m rch.cli next <workspace>
 PYTHONPATH=src python3 -m rch.cli import-rules <workspace> <form-or-rubric-file>
 PYTHONPATH=src python3 -m rch.cli brainstorm <workspace>
 PYTHONPATH=src python3 -m rch.cli research-background <workspace>

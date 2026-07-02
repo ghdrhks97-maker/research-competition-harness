@@ -49,7 +49,11 @@ class McpOpsTests(unittest.TestCase):
             mcp_server.op_assemble(workspace)
             self.assertTrue((Path(workspace) / "output" / "report-draft.md").exists())
 
-            hwpx = mcp_server.op_build_hwpx(workspace)
+            # The legacy python draft is a skeleton, so the quality gate refuses…
+            refused = mcp_server.op_build_hwpx(workspace)
+            self.assertTrue(refused.get("refused"), refused)
+            # …and force=True still allows an inspection build.
+            hwpx = mcp_server.op_build_hwpx(workspace, force=True)
             self.assertTrue(Path(hwpx["hwpx"]).exists())
 
             render = mcp_server.op_render_check(workspace)
