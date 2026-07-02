@@ -14,6 +14,7 @@ server does (``pip install "research-competition-harness[mcp]"``).
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -262,7 +263,9 @@ def build_server() -> Any:
         photo_count: int = 4,
         build_hwpx: bool = True,
     ) -> dict[str, Any]:
-        """브레인스토밍부터 HWPX 검증까지 자동 실행한다. 설문/사진 없으면 placeholder 표를 만든다."""
+        """[레거시 — 완성 보고서용 아님] placeholder 표 중심의 스켈레톤을 빠르게 만든다.
+        완성 보고서는 이 도구가 아니라 에이전트 autopilot(deep-interview → 계획 승인 → next 루프,
+        AGENTS.md 참고)으로 만들어야 한다. 에이전트는 이 도구를 호출하지 말 것."""
         return op_go(
             workspace,
             competition_name=competition_name,
@@ -364,6 +367,17 @@ def build_server() -> Any:
     def revise_loop(workspace: str) -> dict[str, Any]:
         """critic·check·render-check 피드백을 우선순위 수정 백로그로 통합한다."""
         return op_revise_loop(workspace)
+
+    @app.tool()
+    def diagnose(workspace: str) -> dict[str, Any]:
+        """output 폴더를 검진해 보고서가 왜 이상하게 나왔는지(레거시 go 흔적, 표 크기 누락,
+        lane 미실행, placeholder 잔존 등) 신호를 돌려준다."""
+        from rch.cli import diagnose_cmd  # lazy: avoids duplicating the inspection logic
+
+        path = _ws(workspace)
+        diagnose_cmd(path)
+        report = (path / "output" / "diagnose.json").read_text(encoding="utf-8")
+        return json.loads(report)
 
     @app.tool()
     def next(workspace: str) -> dict[str, Any]:
