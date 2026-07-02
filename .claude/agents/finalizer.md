@@ -14,8 +14,9 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 
 ## 정합성 (빌드 전)
 - 본문·요약서·목차·부록이 같은 제목·claim·수치를 쓰는지 확인. 어긋나면 해당 lane 재위임.
-- 예상값(가상) 설문은 draft 단계에서 허용된다. 단 "예상값" 라벨과 placeholder가 유지돼야 한다.
+- 예상값(가상) 설문은 허용된다. 단 "예상값" 라벨과 `expected` claim status가 유지돼야 한다.
 - `rch assemble <ws>`로 번들 생성.
+- final 게이트: 실제 자료만이면 `rch check <ws> --final`, 예상값 포함 완성본이면 `rch check <ws> --final --allow-expected`. 통과 후에만 build-hwpx. 예상값 포함이면 `output/expected-claims.md` 교체 목록을 사용자에게 안내한다.
 
 ## 소스 markdown 위생 (렌더 깨짐 예방 — 강제)
 `output/report-draft.md` 등 조립 결과를 점검해 아래를 **반드시** 고친다:

@@ -135,9 +135,9 @@ def op_assemble(workspace: str) -> dict[str, Any]:
     return {"ok": True, "manifest": manifest_path.read_text(encoding="utf-8") if manifest_path.exists() else ""}
 
 
-def op_check(workspace: str, final: bool = False) -> dict[str, Any]:
+def op_check(workspace: str, final: bool = False, allow_expected: bool = False) -> dict[str, Any]:
     path = _ws(workspace)
-    result = check_workspace(path, final=final)
+    result = check_workspace(path, final=final, allow_expected=allow_expected)
     return result.to_dict()
 
 
@@ -338,9 +338,10 @@ def build_server() -> Any:
         return op_assemble(workspace)
 
     @app.tool()
-    def check(workspace: str, final: bool = False) -> dict[str, Any]:
-        """lane 계약·claim-ledger·금지어를 검증한다. final=True면 최종 후보 규칙."""
-        return op_check(workspace, final=final)
+    def check(workspace: str, final: bool = False, allow_expected: bool = False) -> dict[str, Any]:
+        """lane 계약·claim-ledger·금지어를 검증한다. final=True면 최종 후보 규칙.
+        allow_expected=True면 라벨링된 예상값(status=expected) 주장을 final에서 허용한다."""
+        return op_check(workspace, final=final, allow_expected=allow_expected)
 
     @app.tool()
     def build_hwpx(workspace: str, output: str = "") -> dict[str, Any]:

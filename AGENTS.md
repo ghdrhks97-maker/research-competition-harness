@@ -49,10 +49,12 @@
 **`table-layout`** → 그 뒤 **`summary-sheet`**·**`toc-builder`**·**`appendix-builder`**(병렬).
 
 ### Phase 4 — 비평·검증 루프
-**`critic`** 가 심사자 관점 검토 → `lanes/critic/agent/machine-feedback.json`. 이어서 `rch check <ws>` → `rch revise-loop <ws>`. 지적사항을 해당 에이전트에 다시 위임해 고친다. `rch check <ws> --final` 통과까지 반복(최대 3~4회).
+**`critic`** 가 심사자 관점 검토 → `lanes/critic/agent/machine-feedback.json`. 이어서 `rch check <ws>` → `rch revise-loop <ws>`. 지적사항을 해당 에이전트에 다시 위임해 고친다. final 게이트 통과까지 반복(최대 3~4회). final 게이트는 두 모드다:
+- 실제 자료만으로 완성: `rch check <ws> --final`
+- 예상값(가상) 포함 완성본: `rch check <ws> --final --allow-expected` — 라벨링된 `expected` claim만 허용되고, 교체 목록이 `output/expected-claims.md`에 남는다. 라벨 없는 `expected`와 `placeholder`는 여전히 차단된다.
 
 ### Phase 5 — 조립·렌더
-**`finalizer`** 지휘로 `rch assemble` → `rch check --final`(통과 필수) → `rch build-hwpx` → `rch render-check`. 완료 시 `output/report.hwpx`와 남은 확인사항 제시, "한컴에서 최종 확인" 안내.
+**`finalizer`** 지휘로 `rch assemble` → final 게이트(위 두 모드 중 해당하는 것, 통과 필수) → `rch build-hwpx` → `rch render-check`. 완료 시 `output/report.hwpx`와 남은 확인사항 제시(예상값 포함이면 `output/expected-claims.md` 교체 목록 안내), "한컴에서 최종 확인" 안내.
 
 ## 에이전트 역할 (13)
 
@@ -64,7 +66,7 @@
 
 ## 안전 규칙 (전 역할 강제)
 
-- **실제 조사 결과가 없는 수치·발화·인용은 지어내되 반드시 "예상값(가상)"으로 명확히 라벨링하고 `status: placeholder`로 둔다.** 절대 `real`/`derived`로 표시하거나 "측정되었다"처럼 실제인 것처럼 쓰지 않는다. 예상값은 교육적으로 보수적이어야 한다(과장 금지).
+- **실제 조사 결과가 없는 수치·발화·인용은 지어내되 반드시 "예상값(가상)"으로 명확히 라벨링하고 `status: expected`로 둔다.** 절대 `real`/`derived`로 표시하거나 "측정되었다"처럼 실제인 것처럼 쓰지 않는다. 예상값은 교육적으로 보수적이어야 한다(과장 금지). `expected` claim은 text/notes에 "예상"/"가상" 라벨이 없으면 `rch check`가 거부한다. (`placeholder`는 아직 채우지 못한 초안 구멍 전용 — final 어느 모드에서도 통과 불가.)
 - 실제 설문 수치는 `rch import-survey`가 낸 `input/surveys/analysis/` 값만 `derived`로 인용. 실제값이 들어오면 예상값을 교체한다.
 - `unreviewed`/`high` 위험 사진은 본문·부록에 넣지 않는다. 사진이 없으면 "사진첨부필요" 자리표시로 진행한다.
 - 레퍼런스·웹 문장을 복사하지 않는다(구조·근거 후보만). 존재하지 않는 논문·저자·DOI를 만들지 않는다.
@@ -73,4 +75,6 @@
 
 ## 사용량
 
-LLM 작업은 **구동 런타임 사용량**만 쓴다(AGY→AGY, Codex→Codex, Claude Code→Claude). `rch`의 통계·렌더·검증은 AI 사용량 0. `rch agents run`/`run-lanes --execute`만 다른 CLI를 교차 호출한다(에이전트 우선 모드에서는 쓰지 않는다).
+LLM 작업은 **구동 런타임 사용량**만 쓴다(AGY→AGY, Codex→Codex, Claude Code→Claude). 서브에이전트도 반드시 구동 런타임의 방식(Claude Code Task / AGY 에이전트 매니저 / Codex 병렬 태스크)으로만 스폰한다. `rch`의 통계·렌더·검증은 AI 사용량 0.
+
+`rch agents run`/`run-lanes --execute`는 다른 CLI를 교차 호출하는 명령인데, **하네스가 구동 런타임을 감지하면 다른 CLI 호출을 기본 차단**한다(예: Claude Code 안에서 `rch agents run <ws> codex` → 거부). 정말 필요하면 사용자가 `RCH_ALLOW_CROSS_AGENT=1`로 명시 허용해야 한다. 에이전트는 이 우회를 스스로 켜지 않는다.

@@ -46,10 +46,11 @@ Current CLI enforces `verdict.status` as:
 
 - `real`: directly supported by evidence.
 - `derived`: derived from real evidence and method is recorded.
-- `placeholder`: usable in drafts only.
+- `expected`: clearly-labeled 예상값(가상) — text or notes must contain "예상" or "가상", enforced by `check`.
+- `placeholder`: unresolved draft gap, usable in drafts only.
 - `forbidden`: must not enter report.
 
-Final candidate accepts only `real` and `derived`, and both need an evidence path.
+Final candidate accepts `real` and `derived` (both need an evidence path). With `check --final --allow-expected`, labeled `expected` claims are also accepted and listed in `output/expected-claims.md` for later replacement. `placeholder` never passes final.
 
 ## Merge Rule
 
@@ -58,7 +59,7 @@ No lane output merges into a final bundle unless:
 1. Required files exist.
 2. JSON parses.
 3. Verdict is `pass`.
-4. Every final claim has evidence.
+4. Every final `real`/`derived` claim has evidence (labeled `expected` claims need `--allow-expected` instead).
 5. Every final evidence path is workspace-relative and does not point at `input/raw_private/`.
 6. Every production lane has at least one complete agent output.
 7. `critic/rubric-score.json` has at least 5 criteria, evidence/risk/fix per criterion, and total score at or above 85%.

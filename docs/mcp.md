@@ -27,7 +27,7 @@ pip install -e ".[mcp]"     # mcp 패키지 포함 설치
 | `mine_references(workspace)` | 레퍼런스 구조 추출 |
 | `draft(workspace)` | I~V장 본문·요약·목차·부록 초안 |
 | `assemble(workspace)` | 번들 조립 |
-| `check(workspace, final?)` | 계약·증거·금지어 검증 |
+| `check(workspace, final?, allow_expected?)` | 계약·증거·금지어 검증. `allow_expected`는 라벨링된 예상값(`expected`) 주장을 final에서 허용 |
 | `build_hwpx(workspace, output?)` | HWPX 렌더 |
 | `render_check(workspace, hwpx?, page_limit?)` | HWPX 구조·페이지 검증 |
 | `revise_loop(workspace)` | 피드백 백로그 통합 |

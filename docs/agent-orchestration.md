@@ -46,4 +46,4 @@ GEMINI.md                              # AGENTS.md 포인터
 
 ## 안전
 
-증거 없는 수치·발화·성과·인용 금지(→placeholder), 설문 수치는 `rch import-survey` 결과만, 위험 사진 배제, 레퍼런스·웹 복사 금지, 최종 금지어 없음, HWPX 조립 1회. `rch check --final`이 최종 게이트. 구조 통과 ≠ Hancom 실제 표시(사람이 한컴 확인).
+증거 없는 수치·발화·성과·인용 금지(예상값은 "예상값(가상)" 라벨+`expected`, 빈 구멍은 `placeholder`), 설문 수치는 `rch import-survey` 결과만, 위험 사진 배제, 레퍼런스·웹 복사 금지, 최종 금지어 없음, HWPX 조립 1회. 최종 게이트는 `rch check --final`(실제 자료만) 또는 `rch check --final --allow-expected`(라벨링된 예상값 포함 완성본, 교체 목록 `output/expected-claims.md`). 구조 통과 ≠ Hancom 실제 표시(사람이 한컴 확인).

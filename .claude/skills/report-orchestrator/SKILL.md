@@ -38,10 +38,10 @@ description: 연구대회 보고서를 완성하는 진입점. "연구보고서 
 `table-layout` → 그 뒤 `summary-sheet`·`toc-builder`·`appendix-builder`(병렬).
 
 ### Phase 4 — 비평·검증 루프
-`critic` → `rch check <ws>` → `rch revise-loop <ws>`. 지적사항을 해당 서브에이전트에 다시 위임. `rch check <ws> --final` 통과까지 반복(≤4회).
+`critic` → `rch check <ws>` → `rch revise-loop <ws>`. 지적사항을 해당 서브에이전트에 다시 위임. final 게이트 통과까지 반복(≤4회). final 게이트: 실제 자료만이면 `rch check <ws> --final`, 예상값(가상) 포함 완성본이면 `rch check <ws> --final --allow-expected`(라벨링된 `expected` claim만 허용, `placeholder`는 차단).
 
 ### Phase 5 — 조립·렌더
-`finalizer` 지휘: `rch assemble` → `rch check --final` → `rch build-hwpx` → `rch render-check`. 완료 시 `output/report.hwpx`와 남은 확인사항 제시, "한컴에서 최종 확인" 안내.
+`finalizer` 지휘: `rch assemble` → final 게이트(위 두 모드 중 해당하는 것) → `rch build-hwpx` → `rch render-check`. 완료 시 `output/report.hwpx`와 남은 확인사항 제시(예상값 포함이면 `output/expected-claims.md` 교체 목록 안내), "한컴에서 최종 확인" 안내.
 
 ## 안전 (전 에이전트 강제)
 증거 없는 수치·발화·성과·인용 금지(→placeholder), 설문 수치는 rch 분석만, 위험 사진 배제, 레퍼런스·웹 복사 금지, 최종 금지어 없음, HWPX 조립 1회. 상세는 `AGENTS.md`.
