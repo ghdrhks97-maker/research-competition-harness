@@ -92,6 +92,14 @@ class DesignRenderingTests(unittest.TestCase):
             self.assertIn("▶ 어떻게 기를 것인가?", section)
             self.assertIn("#EEF3FA", header)
 
+    def test_min_pages_warning_when_underfilled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "report.hwpx"
+            build_hwpx("# 제목\n\n짧은 본문\n", out, images_root=Path(tmp))
+            check = render_check(out, min_pages=22)
+            self.assertTrue(check.ok)  # warning, not error
+            self.assertTrue(any("하한" in warn for warn in check.warnings), check.warnings)
+
     def test_chapter_bar_headings_still_match_toc(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "report.hwpx"

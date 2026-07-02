@@ -36,8 +36,11 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 ## 빌드·검증 루프 (강제)
 ```
 rch build-hwpx <ws>
-rch render-check <ws>     # output/render-check.json 을 읽는다
+rch render-check <ws> --page-limit <규정 상한> --min-pages <상한의 90%>
+# 예: 표지·목차·요약서 제외 25쪽 규정 → --page-limit 25 --min-pages 22
+# output/render-check.json 을 읽는다
 ```
+분량 규정은 `input/rules/`에서 읽는다(없으면 25/22). **미달 경고가 나오면 draft-writer에 분량 보강을 재위임**한다(압축만이 아니라 채우기도 게이트다).
 render-check JSON에서 **모두** 확인:
 - `ok == true`, `errors == []`
 - section0.xml에 **페이지 정의(hp:pagePr) 존재** — 없으면 한컴에서 빈 문서로 보인다(→ 최신 코드로 `rch build-hwpx` 재실행)

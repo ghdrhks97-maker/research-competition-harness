@@ -43,7 +43,7 @@ description: 연구대회 보고서를 완성하는 진입점. "연구보고서 
 `draft-writer` 서브에이전트가 Phase 1 결과를 모두 읽고 I~V장 본문 집필. **설문·사진이 없어도 예상값으로 각 장을 완성**한다(대괄호 빈칸 금지).
 
 ### Phase 3 — 편집·부속
-`table-layout` → 그 뒤 `summary-sheet`·`toc-builder`·`appendix-builder`(병렬).
+`table-layout` → 그 뒤 `summary-sheet`·`toc-builder`·`appendix-builder`·`icon-artist`(병렬). icon-artist는 아이콘 시스템 설계 후 `rch render-icons`로 PNG 생성.
 
 ### Phase 4 — 비평·검증 루프
 `critic` → `rch check <ws>` → `rch revise-loop <ws>`. 지적사항을 해당 서브에이전트에 다시 위임. final 게이트 통과까지 반복(≤4회). final 게이트: 실제 자료만이면 `rch check <ws> --final`, 예상값(가상) 포함 완성본이면 `rch check <ws> --final --allow-expected`(라벨링된 `expected` claim만 허용, `placeholder`는 차단).

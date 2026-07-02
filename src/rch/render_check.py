@@ -27,6 +27,9 @@ REQUIRED_ENTRIES = (
 )
 MIMETYPE = "application/hwp+zip"
 DEFAULT_PAGE_LIMIT = 25
+# Competition forms usually demand a *full* body (표지·목차·요약서 제외 25쪽).
+# Below this estimate the report reads under-filled, so the check warns.
+DEFAULT_MIN_PAGES = 0
 # Rough characters-per-page for a dense Korean A4 report body. Estimate only.
 CHARS_PER_PAGE = 1600
 ROWS_PER_PAGE = 45
@@ -43,6 +46,7 @@ class RenderCheck:
     table_count: int = 0
     estimated_pages: int = 0
     page_limit: int = DEFAULT_PAGE_LIMIT
+    min_pages: int = DEFAULT_MIN_PAGES
     toc_headings_matched: bool = True
     toc_mismatches: list[str] = field(default_factory=list)
 
@@ -118,9 +122,12 @@ def _norm(text: str) -> str:
 
 
 def render_check(
-    hwpx_path: Path, toc_path: Path | None = None, page_limit: int = DEFAULT_PAGE_LIMIT
+    hwpx_path: Path,
+    toc_path: Path | None = None,
+    page_limit: int = DEFAULT_PAGE_LIMIT,
+    min_pages: int = DEFAULT_MIN_PAGES,
 ) -> RenderCheck:
-    check = RenderCheck(hwpx_path=hwpx_path.as_posix(), page_limit=page_limit)
+    check = RenderCheck(hwpx_path=hwpx_path.as_posix(), page_limit=page_limit, min_pages=min_pages)
 
     if not hwpx_path.exists():
         check.ok = False
@@ -180,6 +187,11 @@ def render_check(
                     check.warnings.append(
                         f"추정 {check.estimated_pages}쪽이 제한 {page_limit}쪽을 초과(추정치). "
                         "table-layout 압축 검토 필요."
+                    )
+                if min_pages and check.estimated_pages < min_pages:
+                    check.warnings.append(
+                        f"추정 {check.estimated_pages}쪽이 목표 하한 {min_pages}쪽 미만(추정치). "
+                        "본문 밀도 부족 — draft-writer 보강 필요(장별 분량 예산 참고)."
                     )
                 _check_table_integrity(section_root, check)
                 _check_toc(headings, toc_path, check)
@@ -256,9 +268,13 @@ def render_report_markdown(check: RenderCheck) -> str:
 
 
 def run_render_check(
-    hwpx_path: Path, output_dir: Path, toc_path: Path | None = None, page_limit: int = DEFAULT_PAGE_LIMIT
+    hwpx_path: Path,
+    output_dir: Path,
+    toc_path: Path | None = None,
+    page_limit: int = DEFAULT_PAGE_LIMIT,
+    min_pages: int = DEFAULT_MIN_PAGES,
 ) -> RenderCheck:
-    check = render_check(hwpx_path, toc_path=toc_path, page_limit=page_limit)
+    check = render_check(hwpx_path, toc_path=toc_path, page_limit=page_limit, min_pages=min_pages)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "render-check.json").write_text(
         json.dumps(check.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"

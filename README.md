@@ -42,8 +42,9 @@
 | `rch run-lanes <ws> <agent>` | lane별 프롬프트 번들 생성(외부 에이전트 배정용). `--execute` 시 로그인 확인 후 실제 호출 | `prompts/<agent>/` |
 | `rch agents preflight <ws>` | Codex/Antigravity/Claude CLI 설치·로그인 자동 확인 | `output/agent-preflight.{json,md}` |
 | `rch agents run <ws> <agent> --lanes ...` | 프롬프트를 에이전트 CLI로 실제 호출해 응답 수집 | `lanes/<lane>/<agent>/agent-response.md` |
+| `rch render-icons <ws>` | icon-artist가 설계한 `icon-spec.json`을 실제 PNG 아이콘으로 렌더(의존성 0) | `input/icons/rendered/` |
 | `rch build-hwpx <ws>` | 조립된 bundle → HWPX 렌더. `--engine kordoc`으로 한국형 보고서 프리셋 렌더(Node 18+) | `output/report.hwpx` |
-| `rch render-check <ws>` | HWPX 구조·XML·페이지 추정·목차-본문 일치·표 무결성 검증 | `output/render-check.{json,md}` |
+| `rch render-check <ws>` | HWPX 구조·XML·페이지 추정·목차-본문 일치·표 무결성 검증. `--page-limit`(상한)·`--min-pages`(하한, 규정 분량 채움 검사) | `output/render-check.{json,md}` |
 | `rch revise-loop <ws>` | critic·check·render-check 피드백을 우선순위 수정 백로그로 통합 | `output/revision-tasks.{json,md}` |
 
 한 번에 도는 흐름:
@@ -146,7 +147,7 @@ rch next <ws> → done?        → 종료 보고 (한컴 확인 + expected-claim
 
 `rch next`는 lane verdict·산출물 존재·final 게이트를 결정적으로 검사해 다음 작업을 JSON으로 내놓는 상태 머신입니다(LLM 호출 없음, `output/next-plan.json`). 품질 문제(critic 지적·check 오류·render 실패)는 사용자에게 묻지 않고 해당 lane 재위임으로 해소하며, 멈추는 경우는 `needs_user`·개인정보 위험·같은 phase 3회 연속 실패뿐입니다.
 
-### 에이전트별 사용법 (14종)
+### 에이전트별 사용법 (15종)
 
 각 에이전트는 자기 lane의 계약 파일 4종(`lane-output.md`, `lane-output.json`, `claim-ledger.json`, `verdict.json`)을 **진짜 내용**으로 채웁니다. 상세 지침은 `.claude/agents/<이름>.md`.
 
@@ -163,6 +164,7 @@ rch next <ws> → done?        → 종료 보고 (한컴 확인 + expected-claim
 | `summary-sheet` | 3 | 요약서 |
 | `toc-builder` | 3 | 목차·페이지·제목 일관성 |
 | `appendix-builder` | 3 | 과정안·루브릭·활동지·부록 |
+| `icon-artist` | 3 | 문맥 맞는 아이콘 시스템 설계 + `rch render-icons`로 PNG 생성 + 글리프 규칙 배포 |
 | `critic` | 4 | 심사자 관점 비평 → `machine-feedback.json` |
 | `finalizer` | 5 | 정합화·HWPX 조립·렌더 검증 지휘 |
 | `hwpx-designer` | 6 | 검증된 HWPX에 수상작급 디자인(표지·도비라·색 박스·아이콘) 반복 적용 |
